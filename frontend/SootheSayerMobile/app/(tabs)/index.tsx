@@ -17,6 +17,11 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Account Settings Button - Top Right */}
+      <TouchableOpacity style={styles.accountButton} onPress={() => {}}>
+        <IconSymbol name="person.circle.fill" size={32} color="#60a5fa" />
+      </TouchableOpacity>
+
       {/* Camera View - Top Half with Beautiful Background */}
       <View style={styles.cameraContainer}>
         <View style={styles.cameraContent}>
@@ -67,7 +72,7 @@ export default function HomeScreen() {
               <IconSymbol name="video.fill" size={32} color="white" />
             </View>
             <ThemedText style={styles.buttonText}>
-              Record\nVideo
+              Record Video
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -122,6 +127,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  accountButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
   },
   cameraContainer: {
     height: '50%',
