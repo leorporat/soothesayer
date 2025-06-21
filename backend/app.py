@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 
 from PIL import Image
-from SoothSayer import SoothSayer
+from backend.SoothSayer import SoothSayer
 
 app = Flask(__name__)
 
