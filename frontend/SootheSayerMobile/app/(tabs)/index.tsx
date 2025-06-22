@@ -3,6 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import VideoRecorder from '@/components/Camera';
 
 export default function HomeScreen() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
@@ -24,19 +25,7 @@ export default function HomeScreen() {
 
       {/* Camera View - Top Half with Beautiful Background */}
       <View style={styles.cameraContainer}>
-        <View style={styles.cameraContent}>
-          <View style={styles.cameraCard}>
-            <View style={styles.iconContainer}>
-              <IconSymbol name="camera.fill" size={48} color="#60a5fa" />
-            </View>
-            <ThemedText style={styles.cameraTitle}>
-              Camera View
-            </ThemedText>
-            <ThemedText style={styles.cameraSubtitle}>
-              Camera functionality will be added here
-            </ThemedText>
-          </View>
-        </View>
+            <VideoRecorder />
       </View>
 
       {/* Recording Buttons - Below Camera */}
@@ -147,10 +136,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cameraCard: {
+    width: '100%',
+    height: '60%',
+    marginTop: 50,
+    padding: 32,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 24,
-    padding: 32,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   iconContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
