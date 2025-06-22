@@ -37,6 +37,7 @@ client = SoothSayer(os.environ["GROQ_API_KEY"], "MiDaS_small")
 
 async def main(text: str):
     logger.info(f"🔊 [TTS-LEGACY] Starting LMNT synthesis for text: '{text[:50]}...'")
+    logger.info(f"🔊 [TTS-LEGACY] Text: {text}")
     try:
         async with Speech(api_key='ak_GkxGopYg9FwhJaQkJ9huMC') as speech:
             logger.info(f"🔊 [TTS-LEGACY] LMNT client initialized")
