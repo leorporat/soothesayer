@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from groq_inference import get_text_from_image_front_camera, get_text_from_image_back_camera, get_text_from_audio, analyze_combined_results
+#from groq_inference import get_text_from_image_front_camera, get_text_from_image_back_camera, get_text_from_audio, analyze_combined_results
+from SoothSayer import SoothSayer
 import os
 from datetime import datetime
 import shutil
@@ -11,17 +12,8 @@ CORS(app)
 # Create uploads folder
 os.makedirs('uploads', exist_ok=True)
 
-# Create audio uploads folder specifically for mobile app
-os.makedirs('uploads/audio', exist_ok=True)
-
-def get_latest_audio_path():
-    """
-    Helper function to get the path to the most recent audio file
-    """
-    latest_path = "uploads/audio/latest_audio.m4a"
-    if os.path.exists(latest_path):
-        return latest_path
-    return None
+# SoothSayer init
+client = SoothSayer(os.environ.get("GROQ_API_KEY"))
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -36,7 +28,7 @@ def analyze_face_sentiment():
     filepath = f"uploads/{file.filename}"
     file.save(filepath)
     
-    result = get_text_from_image_front_camera(filepath)
+    result = client.get_text_from_image_front_camera(filepath)
     os.remove(filepath)
     
     return jsonify({
@@ -53,7 +45,7 @@ def analyze_environment_sentiment():
     filepath = f"uploads/{file.filename}"
     file.save(filepath)
     
-    result = get_text_from_image_back_camera(filepath)
+    result = client.get_text_from_image_back_camera(filepath)
     os.remove(filepath)
     
     return jsonify({
@@ -70,7 +62,7 @@ def analyze_audio_transcription():
     filepath = f"uploads/{file.filename}"
     file.save(filepath)
     
-    transcription = get_text_from_audio(filepath)
+    transcription = client.get_text_from_audio(filepath)
     os.remove(filepath)
     
     return jsonify({
@@ -81,12 +73,10 @@ def analyze_audio_transcription():
 @app.route('/api/analyze/combined-sentiment', methods=['POST'])
 def analyze_combined_sentiment():
     # Check if all required files are present
-    if 'face_image' not in request.files:
-        return jsonify({'error': 'No face image file'}), 400
-    if 'environment_image' not in request.files:
-        return jsonify({'error': 'No environment image file'}), 400
-    if 'audio' not in request.files:
-        return jsonify({'error': 'No audio file'}), 400
+    required = ['face_image', 'environment_image', 'audio']
+    for req in required:
+        if req not in request.files:
+            return jsonify({'error': f'No {req} file'}), 400
     
     # Save all files temporarily
     face_file = request.files['face_image']
@@ -102,30 +92,21 @@ def analyze_combined_sentiment():
     audio_file.save(audio_filepath)
     
     # Get all analyses
-    face_result = get_text_from_image_front_camera(face_filepath)
-    env_result = get_text_from_image_back_camera(env_filepath)
-    audio_transcription = get_text_from_audio(audio_filepath)
+    analysis = client.input_to_audio(face_filepath, env_filepath, audio_filepath)
     
     # Clean up files
     os.remove(face_filepath)
     os.remove(env_filepath)
     os.remove(audio_filepath)
     
-    # Analyze the combined results
-    analysis = analyze_combined_results(
-        face_result.content, 
-        env_result.content, 
-        audio_transcription
-    )
-    
     # Return combined results with analysis
     return jsonify({
         'success': True,
-        'raw_data': {
-            'face_sentiment': face_result.content,
-            'environment_analysis': env_result.content,
-            'audio_transcription': audio_transcription
-        },
+        # 'raw_data': {
+        #     'face_sentiment': face_result.content,
+        #     'environment_analysis': env_result.content,
+        #     'audio_transcription': audio_transcription
+        # },
         'analysis': analysis
     })
 

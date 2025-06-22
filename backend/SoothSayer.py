@@ -1,6 +1,6 @@
 from groq import Groq
 
-import cv2, torch
+import cv2, torch, base64
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -31,40 +31,36 @@ class SoothSayer:
             self.transform = midas_transforms.small_transform
 
     def input_to_audio(self, image_front, image_back, audio) -> None:
-        speech = self.recognizer.listen(audio)
+        facial_sentiment       = self.get_text_from_image_front_camera(image_front)
+        sight_characterization = self.get_text_from_image_back_camera(image_back)
+        audio_transcript       = self.get_text_from_audio(audio)
+
+        optimal_angle_of_movement = self.image_to_projection(image_back)
+
+        prompt = f"Facial Sentiment:\n{facial_sentiment}\n\nObject In Front of User:\n{sight_characterization}\n\nUser speech:\n{audio_transcript}\n\nOptimal angle of unobstructed movement from 0-180º where 0 is straight left and 180 is straight right:\n{optimal_angle_of_movement}.\n\nPlease keep it conversational and under 20 words."
         
-        completion = self.client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        chat_completion = self.client.chat.completions.create(
             messages=[
-            {
-                "role": "system",
-                "content": "aaaaa"
-            },
-            {
-                "role": "user",
-                "content": [
+                # Set an optional system message. This sets the behavior of the
+                # assistant and can be used to provide specific instructions for
+                # how it should behave throughout the conversation.
                 {
-                    "type": "text",
-                    "text": "analyze this briefly"
+                    "role": "system",
+                    "content": "You are a helpful assistant that analyzes combined sentiment data from facial expressions, environment, and audio transcription. Provide insights and recommendations based on this data."
                 },
+                # Set a user message for the assistant to respond to.
                 {
-                    "type": "image_url",
-                    "image_url": {
-                    "url": f"data:image/jpeg;base64,{image_back}"
-                    }
+                    "role": "user",
+                    "content": prompt,
                 }
-                ]
-            }
-            ],
-            temperature=1,
-            max_completion_tokens=1024,
-            top_p=1,
-            stream=True,
-            stop=None,
+                ],
+
+                    # The language model which will generate the completion.
+            model="llama-3.3-70b-versatile"
         )
 
-        for chunk in completion:
-            print(chunk.choices[0].delta.content or "", end="")
+        return chat_completion.choices[0].message.content
+
     
     def image_to_projection(self,image):
         #img = cv2.imdecode(np.array(image))
@@ -140,3 +136,140 @@ class SoothSayer:
         
         return optimal_direction
                         
+    def get_text_from_image_front_camera(self, image_path):
+        # Convert local image to base64
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        
+        completion = self.client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": """You are an expert at analyzing human emotions from visual cues. Your task is to identify the emotional state of a person based on their facial expressions, body language, and overall appearance.
+
+                                    ## Instructions
+
+                                    Analyze the provided image or description and identify the person's emotional state. Consider these visual indicators:
+
+                                    **Facial Expression Cues:**
+                                    - Eyes: openness, tension, gaze direction, eyebrow position
+                                    - Mouth: shape, tension, corners (up/down/neutral)
+                                    - Forehead: wrinkles, furrows, smoothness
+                                    - Overall facial muscle tension or relaxation
+
+                                    **Body Language Indicators:**
+                                    - Posture: upright, slouched, tense, relaxed
+                                    - Shoulder position: raised, dropped, forward, back
+                                    - Hand gestures and positioning
+                                    - Overall body tension or openness
+
+                                    **Contextual Visual Cues:**
+                                    - Energy level apparent in the image
+                                    - Apparent comfort or discomfort
+                                    - Social engagement indicators
+
+                                    ## Output Format
+
+                                    Provide your analysis in this structured format:
+
+                                    **Primary Emotion:** [Single most prominent emotion]
+                                    **Confidence Level:** [High/Medium/Low]
+                                    **Secondary Emotions:** [Additional emotions if present]
+                                    **Key Visual Indicators:** [Specific features that led to this assessment]
+
+                                    ## Emotion Categories
+
+                                    Consider these emotional states (but don't limit yourself to only these):
+
+                                    **Positive Emotions:** Happy, joyful, excited, confident, calm, peaceful, content, amused, surprised (positive), proud, grateful, loving, enthusiastic
+
+                                    **Negative Emotions:** Sad, anxious, nervous, worried, frustrated, angry, disappointed, scared, disgusted, ashamed, guilty, embarrassed, lonely, overwhelmed
+
+                                    **Neutral/Mixed Emotions:** Neutral, contemplative, focused, curious, tired, bored, confused, skeptical, determined, serious
+
+                                    ## Guidelines
+
+                                    - Be specific rather than generic (e.g., "anxiously excited" rather than just "excited")
+                                    - Note when emotions appear mixed or conflicted
+                                    - Distinguish between temporary expressions and apparent underlying emotional states
+                                    - Consider cultural context when relevant
+                                    - If the emotional state is unclear, indicate uncertainty and explain why
+                                    - Avoid making assumptions about causes of emotions, focus only on what's visually apparent
+
+                                    ## Example Response
+
+                                    **Primary Emotion:** Nervously excited
+                                    **Confidence Level:** High
+                                    **Secondary Emotions:** Slight apprehension, anticipation
+                                    **Key Visual Indicators:** Bright eyes with slight tension around them, genuine smile with slightly raised eyebrows, upright but slightly tense posture, hands clasped together"""
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{encoded_string}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=False,
+            stop=None,
+        )
+
+        return completion.choices[0].message
+
+    def get_text_from_image_back_camera(self, image_path):
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+        completion = self.client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "What's in this image?"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{encoded_string}" # CHANGE IMAGE FILE HERE, this would be image from camera
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=1024,
+            top_p=1,
+            stream=False,
+            stop=None,
+        )
+
+        print(completion.choices[0].message)
+        return completion.choices[0].message
+
+    def get_text_from_audio(self, filename):
+        with open(filename, "rb") as file:
+            # Create a transcription of the audio file
+            transcription = self.client.audio.transcriptions.create(
+            file=file, # Required audio file
+            model="whisper-large-v3-turbo", # Required model to use for transcription
+            prompt="Specify context or spelling",  # Optional
+            response_format="verbose_json",  # Optional
+            timestamp_granularities = ["word", "segment"], # Optional (must set response_format to "json" to use and can specify "word", "segment" (default), or both)
+            language="en",  # Optional
+            temperature=0.0  # Optional
+            )
+            # To print only the transcription text, you'd use print(transcription.text) (here we're printing the entire transcription object to access timestamps)
+            # print(json.dumps(transcription, indent=2, default=str))
+            return transcription.text

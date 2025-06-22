@@ -12,6 +12,7 @@ def analyze_combined_results(face_sentiment, environment_analysis, audio_transcr
     Dummy function that analyzes the combined results from all three sources.
     In a real implementation, this would use AI to synthesize insights.
     """
+
     # Simple analysis logic - in reality this would be much more sophisticated
     chat_completion = client.chat.completions.create(
         messages=[
@@ -122,7 +123,6 @@ def get_text_from_image_front_camera(image_path):
         stop=None,
     )
 
-    print(completion.choices[0].message)
     return completion.choices[0].message
 
 def get_text_from_image_back_camera(image_path):
