@@ -79,44 +79,44 @@ export default function HomeScreen() {
     }
   };
 
-  // const sendAudioToBackend = async (audioUri: string) => {
-  //   try {
-  //     console.log('Sending audio to backend:', audioUri);
+  const sendAudioToBackend = async (audioUri: string) => {
+    try {
+      console.log('Sending audio to backend:', audioUri);
       
-  //     // Create form data for file upload
-  //     const formData = new FormData();
-  //     formData.append('audio', {
-  //       uri: audioUri,
-  //       type: 'audio/m4a',
-  //       name: `audio_${Date.now()}.m4a`
-  //     } as any);
+      // Create form data for file upload
+      const formData = new FormData();
+      formData.append('audio', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: `audio_${Date.now()}.m4a`
+      } as any);
       
-  //     // Add any additional metadata
-  //     formData.append('timestamp', Date.now().toString());
-  //     formData.append('duration', '10'); // 10 seconds for interval recordings
+      // Add any additional metadata
+      formData.append('timestamp', Date.now().toString());
+      formData.append('duration', '10'); // 10 seconds for interval recordings
       
-  //     // Send to your backend endpoint
-  //     const response = await fetch('YOUR_BACKEND_URL/api/audio/upload', {
-  //       method: 'POST',
-  //       body: formData,
-  //       headers: {
-  //         'Content-Type': 'multipart/form-data',
-  //         // Add any authentication headers if needed
-  //         // 'Authorization': 'Bearer YOUR_TOKEN'
-  //       },
-  //     });
+      // Send to your backend endpoint
+      const response = await fetch('http://localhost:5001/api/audio/upload', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          // Add any authentication headers if needed
+          // 'Authorization': 'Bearer YOUR_TOKEN'
+        },
+      });
       
-  //     if (response.ok) {
-  //       console.log('Audio sent successfully');
-  //       const result = await response.json();
-  //       console.log('Backend response:', result);
-  //     } else {
-  //       console.error('Failed to send audio:', response.status);
-  //     }
-  //   } catch (error) {
-  //     console.error('Error sending audio to backend:', error);
-  //   }
-  // };
+      if (response.ok) {
+        console.log('Audio sent successfully');
+        const result = await response.json();
+        console.log('Backend response:', result);
+      } else {
+        console.error('Failed to send audio:', response.status);
+      }
+    } catch (error) {
+      console.error('Error sending audio to backend:', error);
+    }
+  };
 
   const stopRecording = async () => {
     if (!recording) return;
@@ -142,7 +142,7 @@ export default function HomeScreen() {
         console.log('Audio saved:', newUri);
         
         // Send the audio to your backend
-        // await sendAudioToBackend(newUri);
+        await sendAudioToBackend(newUri);
       }
     } catch (err) {
       console.error('Failed to stop recording', err);
