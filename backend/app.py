@@ -6,6 +6,9 @@ import os
 from datetime import datetime
 import shutil
 
+import asyncio
+from lmnt.api import Speech
+
 app = Flask(__name__)
 CORS(app)
 
@@ -14,6 +17,12 @@ os.makedirs('uploads', exist_ok=True)
 
 # SoothSayer init
 client = SoothSayer(os.environ.get("GROQ_API_KEY"))
+
+async def main(text: str):
+    async with Speech(api_key='ak_GkxGopYg9FwhJaQkJ9huMC') as speech:
+        synthesis = await speech.synthesize(text, 'leah')
+    with open('hello.mp3', 'wb') as f:
+        f.write(synthesis['audio'])
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -93,6 +102,7 @@ def analyze_combined_sentiment():
     
     # Get all analyses
     analysis = client.input_to_audio(face_filepath, env_filepath, audio_filepath)
+    asyncio.run(main('analysis'))
     
     # Clean up files
     os.remove(face_filepath)
@@ -152,7 +162,7 @@ def upload_audio():
         
         # Process the audio file (transcribe it)
         try:
-            transcription = get_text_from_audio(latest_filepath)
+            transcription = client.get_text_from_audio(latest_filepath)
             print(f"Audio transcribed successfully: {latest_filename}")
         except Exception as e:
             print(f"Error transcribing audio {latest_filename}: {str(e)}")
