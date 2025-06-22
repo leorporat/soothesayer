@@ -173,6 +173,12 @@ def analyze_combined_sentiment():
     audio_filepath = f"uploads/{audio_file.filename}"
     audio_file.save(audio_filepath)
     logger.info(f"🔮 [COMBINED-ANALYSIS] Audio file saved: {audio_filepath}")
+
+    raw_analysis = (
+        client.get_text_from_image_front_camera(face_filepath),
+        client.get_text_from_image_back_camera(env_filepath),
+        client.get_text_from_audio(audio_filepath)
+    )
     
     # Get all analyses
     logger.info("🔮 [COMBINED-ANALYSIS] Starting SoothSayer comprehensive analysis...")
@@ -193,11 +199,11 @@ def analyze_combined_sentiment():
     # Return combined results with analysis
     return jsonify({
         'success': True,
-        # 'raw_data': {
-        #     'face_sentiment': face_result.content,
-        #     'environment_analysis': env_result.content,
-        #     'audio_transcription': audio_transcription
-        # },
+        'raw_data': {
+            'face_sentiment': raw_analysis[0],
+            'environment_analysis': raw_analysis[1],
+            'audio_transcription': raw_analysis[2]
+        },
         'analysis': analysis
     })
 
