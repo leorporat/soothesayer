@@ -90,21 +90,53 @@ class SoothSayer:
         x = np.flip(np.tile(np.arange(w), h)/40)
         x = x - x.mean()
         y = -np.flip(output.flatten()) + 38
+        #y = np.flip(output.flatten())
         z = np.repeat(np.arange(h), w)/40
 
-        
         xyz = np.stack((x, y, z), axis=1)
 
         y = xyz[:, 1]
-
-        # Compute threshold for top 20%
-        # threshold = np.percentile(y, 80)
-        # mask = y >= threshold
-        # xyz = xyz[mask]
         
         pts = Points(xyz, r=4)  # r is point radius
         pts.cmap("viridis", xyz[:, 1])  # color by y-values (you can change this)
         show(pts, axes=1, bg='white', title='3D Point Cloud')
 
+        # Get x and y components
+        xy = xyz[:, :2]  # shape (N, 2)
+        angles_xy = np.arctan2(xy[:,1], xy[:,0])  # in radians
+        angles_xy = np.degrees(angles_xy) % 360  # convert to [0, 360)
 
+        # We'll check from 0 to 180 in 10° slices
+        slices = [(i, i+10) for i in range(0, 180, 10)]
         
+        max_distance = float(0)
+        best_slice = None
+
+        for low, high in slices:
+            # Filter points whose (x, y) angle falls in the slice
+            in_slice = (angles_xy >= low) & (angles_xy < high)
+            selected = xyz[in_slice]
+
+            if selected.shape[0] == 0:
+                continue  # no points in this slice
+
+            # Direction vector = midpoint of the slice
+            theta = np.radians((low + high) / 2)
+            dir_xy = np.array([np.cos(theta), np.sin(theta), 0.0])
+            dir_z  = np.array([0.0, 0.0, 1.0])
+
+            # Create basis: [XY direction, Z axis]
+            basis = np.stack([dir_xy, dir_z], axis=1)  # shape (3, 2)
+            P = basis @ np.linalg.inv(basis.T @ basis) @ basis.T
+
+            projections = selected @ P.T
+            distance = np.sum(np.sum(projections**2, axis=1))
+
+            if distance > max_distance:
+                max_distance = distance
+                best_slice = (low, high)
+
+        optimal_direction = np.mean(best_slice)
+        
+        return optimal_direction
+                        
