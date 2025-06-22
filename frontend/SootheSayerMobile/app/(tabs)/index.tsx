@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -8,6 +10,144 @@ import VideoRecorder from '@/components/Camera';
 export default function HomeScreen() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [sliderValue, setSliderValue] = useState(50);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isIntervalRecordingOn, setIsIntervalRecordingOn] = useState(false);
+  const [recordedAudios, setRecordedAudios] = useState<string[]>([]);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const intervalRef = useRef<number | null>(null);
+
+  // Request audio permissions on component mount
+  useEffect(() => {
+    (async () => {
+      const { status } = await Audio.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+      
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+      });
+    })();
+  }, []);
+
+  // Handle interval audio recording
+  useEffect(() => {
+    if (isIntervalRecordingOn && hasPermission) {
+      // Start recording audio every 15 seconds
+      intervalRef.current = setInterval(async () => {
+        try {
+          console.log('Starting interval audio recording...');
+          await startRecording();
+          
+          // Stop recording after 10 seconds (to create 10-second clips)
+          setTimeout(async () => {
+            await stopRecording();
+          }, 10000);
+          
+        } catch (error) {
+          console.error('Error in interval recording:', error);
+        }
+      }, 15000); // 15 seconds between recordings
+    } else {
+      // Clear interval when turned off
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isIntervalRecordingOn, hasPermission]);
+
+  const startRecording = async () => {
+    try {
+      console.log('Starting recording...');
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      console.log('Recording started');
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  // const sendAudioToBackend = async (audioUri: string) => {
+  //   try {
+  //     console.log('Sending audio to backend:', audioUri);
+      
+  //     // Create form data for file upload
+  //     const formData = new FormData();
+  //     formData.append('audio', {
+  //       uri: audioUri,
+  //       type: 'audio/m4a',
+  //       name: `audio_${Date.now()}.m4a`
+  //     } as any);
+      
+  //     // Add any additional metadata
+  //     formData.append('timestamp', Date.now().toString());
+  //     formData.append('duration', '10'); // 10 seconds for interval recordings
+      
+  //     // Send to your backend endpoint
+  //     const response = await fetch('YOUR_BACKEND_URL/api/audio/upload', {
+  //       method: 'POST',
+  //       body: formData,
+  //       headers: {
+  //         'Content-Type': 'multipart/form-data',
+  //         // Add any authentication headers if needed
+  //         // 'Authorization': 'Bearer YOUR_TOKEN'
+  //       },
+  //     });
+      
+  //     if (response.ok) {
+  //       console.log('Audio sent successfully');
+  //       const result = await response.json();
+  //       console.log('Backend response:', result);
+  //     } else {
+  //       console.error('Failed to send audio:', response.status);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error sending audio to backend:', error);
+  //   }
+  // };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      console.log('Stopping recording...');
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      
+      if (uri) {
+        // Convert to MP3 format (this is a simplified approach)
+        const fileName = `audio_${Date.now()}.m4a`; // Using m4a as it's widely supported
+        const newUri = `${FileSystem.documentDirectory}${fileName}`;
+        
+        // Copy the file to our documents directory
+        await FileSystem.copyAsync({
+          from: uri,
+          to: newUri
+        });
+        
+        setRecordedAudios(prev => [...prev, newUri]);
+        console.log('Audio saved:', newUri);
+        
+        // Send the audio to your backend
+        // await sendAudioToBackend(newUri);
+      }
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    }
+  };
 
   const handleSliderPress = (event: any) => {
     const { locationX } = event.nativeEvent;
@@ -15,6 +155,45 @@ export default function HomeScreen() {
     const percentage = Math.max(0, Math.min(100, (locationX / sliderWidth) * 100));
     setSliderValue(Math.round(percentage));
   };
+
+  const toggleManualRecording = async () => {
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Microphone permission is required to record audio.');
+      return;
+    }
+
+    if (isRecordingAudio) {
+      await stopRecording();
+      setIsRecordingAudio(false);
+    } else {
+      await startRecording();
+      setIsRecordingAudio(true);
+    }
+  };
+
+  const toggleIntervalRecording = () => {
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Microphone permission is required to record audio.');
+      return;
+    }
+    setIsIntervalRecordingOn(!isIntervalRecordingOn);
+  };
+
+  if (hasPermission === null) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText style={styles.loadingText}>Requesting microphone permission...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText style={styles.errorText}>No access to microphone</ThemedText>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -25,7 +204,7 @@ export default function HomeScreen() {
 
       {/* Camera View - Top Half with Beautiful Background */}
       <View style={styles.cameraContainer}>
-            <VideoRecorder />
+        <VideoRecorder />
       </View>
 
       {/* Recording Buttons - Below Camera */}
@@ -37,7 +216,7 @@ export default function HomeScreen() {
               styles.recordButton,
               isRecordingAudio ? styles.recordingButton : styles.voiceButton
             ]}
-            onPress={() => setIsRecordingAudio(!isRecordingAudio)}
+            onPress={toggleManualRecording}
             activeOpacity={0.8}
           >
             <View style={styles.iconWrapper}>
@@ -53,17 +232,34 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.recordButton, styles.videoButton]}
-            onPress={() => {}}
+            style={[
+              styles.recordButton, 
+              isIntervalRecordingOn ? styles.recordingButton : styles.videoButton
+            ]}
+            onPress={toggleIntervalRecording}
             activeOpacity={0.8}
           >
             <View style={styles.iconWrapper}>
-              <IconSymbol name="video.fill" size={32} color="white" />
+              <IconSymbol 
+                name={isIntervalRecordingOn ? "stop.fill" : "video.fill"} 
+                size={32} 
+                color="white" 
+              />
             </View>
             <ThemedText style={styles.buttonText}>
-              Record Video
+              {isIntervalRecordingOn ? 'Stop\nAuto-Record' : 'Start\nAuto-Record'}
             </ThemedText>
           </TouchableOpacity>
+        </View>
+
+        {/* Audio Status Display */}
+        <View style={styles.audioStatusContainer}>
+          <ThemedText style={styles.audioStatusText}>
+            {isIntervalRecordingOn 
+              ? `Auto-recording every 15s (${recordedAudios.length} files)` 
+              : `Recorded: ${recordedAudios.length} files`
+            }
+          </ThemedText>
         </View>
 
         {/* Beautiful Slider Meter */}
@@ -163,6 +359,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.8,
   },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 100,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 100,
+  },
   buttonContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -175,7 +383,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 24,
-    marginBottom: 40,
+    marginBottom: 20,
   },
   recordButton: {
     width: 144,
@@ -205,6 +413,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  audioStatusContainer: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginBottom: 20,
+  },
+  audioStatusText: {
+    color: '#60a5fa',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
   sliderContainer: {
     width: '100%',
