@@ -2021,21 +2021,6 @@ files = [
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
-name = "pygments"
-version = "2.19.2"
-description = "Pygments is a syntax highlighting package written in Python."
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b"},
-    {file = "pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887"},
-]
-
-[package.extras]
-windows-terminal = ["colorama (>=0.4.6)"]
-
-[[package]]
 name = "pyparsing"
 version = "3.2.3"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -2541,67 +2526,6 @@ socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
-name = "vedo"
-version = "2025.5.4"
-description = "A python module for scientific visualization, analysis of 3D objects and point clouds."
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "vedo-2025.5.4-py3-none-any.whl", hash = "sha256:929328886304aeadd64ef80bba39306a49fb1fa9df1628f231fbf0edeedd420e"},
-    {file = "vedo-2025.5.4.tar.gz", hash = "sha256:feb585782b99f44f8d2890e689418d593bdeefc2f8c58a80aa2d9ec3a39253a4"},
-]
-
-[package.dependencies]
-numpy = "*"
-Pygments = "*"
-typing-extensions = "*"
-vtk = "*"
-
-[package.extras]
-all = ["scipy"]
-
-[[package]]
-name = "vtk"
-version = "9.4.2"
-description = "VTK is an open-source toolkit for 3D computer graphics, image processing, and visualization"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "vtk-9.4.2-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:97788af1881d115d90d118e6b6db4e673d4250473df074015edaf633e134945f"},
-    {file = "vtk-9.4.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c5b2db2ffb52394cf3a72fb9d74ec980d944b9fecd626bdcd223ac896fa8b975"},
-    {file = "vtk-9.4.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:20898263a57a2f414d6deaf9fecf0d81f6eb43d8f2002c66b20425d258e2a316"},
-    {file = "vtk-9.4.2-cp310-cp310-win_amd64.whl", hash = "sha256:918830427783737c38f5e3f4ad81f229904c975665897d09748057fcfacab42b"},
-    {file = "vtk-9.4.2-cp311-cp311-macosx_10_10_x86_64.whl", hash = "sha256:267302d1def1f28c7a4bed1422bccb55f20db6a9b760d25883535bd56111143b"},
-    {file = "vtk-9.4.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:c378ec0a51fc690268c30484828e6ffe4b525be87bf21229c29a773f910787e1"},
-    {file = "vtk-9.4.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4b9db93562c9d6b39dafd65f00eccc5eb9bcc6a7c715db789c064536551368f2"},
-    {file = "vtk-9.4.2-cp311-cp311-win_amd64.whl", hash = "sha256:ee6013aef653aca14f881a2b4b33b13895166fad34eac340691852444848e971"},
-    {file = "vtk-9.4.2-cp312-cp312-macosx_10_10_x86_64.whl", hash = "sha256:5482c147e36490a90fadf01333b8b06f2a88659a9cb012523603697e7de37dc7"},
-    {file = "vtk-9.4.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ac03471cada196b9465305336649cd502ce4796ee5006eade2cdaf7f2b5b593b"},
-    {file = "vtk-9.4.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ef81842d151312b52455b2b613871c57ca7323c2f901914e13fc750b74ce3fd2"},
-    {file = "vtk-9.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:fded22d5bc8cd2193ef27214efb63e1db5318f566fb64f2cf31332b820ece6ac"},
-    {file = "vtk-9.4.2-cp313-cp313-macosx_10_10_x86_64.whl", hash = "sha256:ec8c4258ceb9b3eb9c8101e1db1cca16825f0c0daa891ae4d85cd2ae9ec7681c"},
-    {file = "vtk-9.4.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1e291fc1a0c6a8432185abd9265d44fc7822b39325dc8e81d01b798858b68733"},
-    {file = "vtk-9.4.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c6d15129443eb950b8faf127b67935a680533aa08ad832b9137889543084ddd"},
-    {file = "vtk-9.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:5be5096e8c247c1ae151cc68121fbb0b6c5c76217e69d9600e4b8ba0c1c53c9f"},
-    {file = "vtk-9.4.2-cp38-cp38-macosx_10_10_x86_64.whl", hash = "sha256:7211fd50ba6c75b0ccc9e66a489e484967590a4c1dc8df2f51cfab76b582bb15"},
-    {file = "vtk-9.4.2-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c09149df36c3023bfd9a58263491477838651a7ce1c5eddd8ebead84de935068"},
-    {file = "vtk-9.4.2-cp38-cp38-win_amd64.whl", hash = "sha256:747b69bbc1cb7d50d461454da91d4d300b183ca6811dba9f4c8642aa2ada0a10"},
-    {file = "vtk-9.4.2-cp39-cp39-macosx_10_10_x86_64.whl", hash = "sha256:8c52ae99ee97dcb973e0a6cf33c0ab849cdf66391be9b4f1ead40d12d33934c0"},
-    {file = "vtk-9.4.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:c4a35f32011d5a2a6fc1263292533918fab3f6a3686d4718dce308f5b08555cc"},
-    {file = "vtk-9.4.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:290017e775d35a79187b8ed84f56c787a5047802c5cddf3068dc2275f548e040"},
-    {file = "vtk-9.4.2-cp39-cp39-win_amd64.whl", hash = "sha256:86d4ccd4a09c1a7a29919f892106fcb4190ceb9bdf64e391270860b25acc2a0e"},
-]
-
-[package.dependencies]
-matplotlib = ">=2.0.0"
-
-[package.extras]
-numpy = ["numpy (>=1.9)"]
-web = ["wslink (>=1.0.4)"]
-
-[[package]]
 name = "werkzeug"
 version = "3.1.3"
 description = "The comprehensive WSGI web application library."
@@ -2741,4 +2665,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "457d0041f42a590121d7ee8809c3c7c2afbfc9114cfb5f8ec9632aad90b86842"
+content-hash = "29b2fe45ba13896f3960205af3c658de17661d0cde2b1653590cf10734814240"

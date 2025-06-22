@@ -6,7 +6,6 @@ import os
 from datetime import datetime
 import shutil
 from dotenv import load_dotenv
-from collections import defaultdict
 import time
 
 import asyncio
@@ -29,46 +28,6 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-
-# Simple rate limiting
-request_counts = defaultdict(list)
-RATE_LIMIT_REQUESTS = 20  # Max requests per minute
-RATE_LIMIT_WINDOW = 60  # 60 seconds
-
-def is_rate_limited(ip_address: str) -> bool:
-    """Simple rate limiting based on IP address"""
-    now = time.time()
-    
-    # Clean old requests outside the window
-    request_counts[ip_address] = [
-        req_time for req_time in request_counts[ip_address] 
-        if now - req_time < RATE_LIMIT_WINDOW
-    ]
-    
-    # Check if rate limit exceeded
-    if len(request_counts[ip_address]) >= RATE_LIMIT_REQUESTS:
-        logger.warning(f"🚫 [RATE-LIMIT] IP {ip_address} exceeded rate limit: {len(request_counts[ip_address])}/{RATE_LIMIT_REQUESTS} requests in {RATE_LIMIT_WINDOW}s")
-        return True
-    
-    # Add current request
-    request_counts[ip_address].append(now)
-    logger.info(f"📊 [RATE-LIMIT] IP {ip_address}: {len(request_counts[ip_address])}/{RATE_LIMIT_REQUESTS} requests in window")
-    return False
-
-@app.before_request
-def before_request():
-    """Check rate limiting before processing request"""
-    ip = request.remote_addr or 'unknown'
-    
-    # Skip rate limiting for health check only
-    if request.endpoint == 'health_check':
-        return
-    
-    if is_rate_limited(ip):
-        return jsonify({
-            'error': 'Rate limit exceeded',
-            'message': f'Maximum {RATE_LIMIT_REQUESTS} requests per {RATE_LIMIT_WINDOW} seconds allowed'
-        }), 429
 
 # Create uploads folder
 os.makedirs('uploads', exist_ok=True)
@@ -149,50 +108,139 @@ def analyze_audio_transcription():
 def analyze_combined_sentiment():
     logger.info("🔮 [COMBINED-ANALYSIS] Starting combined sentiment analysis")
     
-    # Check if all required files are present
-    required = ['face_image', 'environment_image', 'audio']
-    for req in required:
-        if req not in request.files:
-            logger.warning(f"❌ [COMBINED-ANALYSIS] Missing required file: {req}")
-            return jsonify({'error': f'No {req} file'}), 400
+    # Initialize filepath variables
+    face_filepath = None
+    env_filepath = None
+    audio_filepath = None
     
-    logger.info("🔮 [COMBINED-ANALYSIS] All required files present")
-    
-    # Save all files temporarily
-    face_file = request.files['face_image']
-    face_filepath = f"uploads/{face_file.filename}"
-    face_file.save(face_filepath)
-    logger.info(f"🔮 [COMBINED-ANALYSIS] Face image saved: {face_filepath}")
-    
-    env_file = request.files['environment_image']
-    env_filepath = f"uploads/{env_file.filename}"
-    env_file.save(env_filepath)
-    logger.info(f"🔮 [COMBINED-ANALYSIS] Environment image saved: {env_filepath}")
-    
-    audio_file = request.files['audio']
-    audio_filepath = f"uploads/{audio_file.filename}"
-    audio_file.save(audio_filepath)
-    logger.info(f"🔮 [COMBINED-ANALYSIS] Audio file saved: {audio_filepath}")
+    # Check if this is a request to use latest files
+    if request.content_type == 'application/json':
+        data = request.get_json()
+        use_latest_files = data.get('use_latest_files', False)
+        
+        if use_latest_files:
+            logger.info("🔮 [COMBINED-ANALYSIS] Using latest files from uploads directory")
+            
+            # Get latest audio file
+            latest_audio_path = get_latest_audio_path()
+            if not latest_audio_path:
+                logger.warning("❌ [COMBINED-ANALYSIS] No audio files found")
+                return jsonify({'error': 'No audio files found'}), 404
+            
+            audio_filepath = latest_audio_path
+            logger.info(f"🔮 [COMBINED-ANALYSIS] Latest audio file: {audio_filepath}")
+            
+            # Get latest photo files
+            try:
+                uploads_dir = "uploads"
+                if not os.path.exists(uploads_dir):
+                    logger.warning("❌ [COMBINED-ANALYSIS] Uploads directory not found")
+                    return jsonify({'error': 'Uploads directory not found'}), 404
+                
+                # Get all photo files
+                photo_files = [f for f in os.listdir(uploads_dir) if f.startswith('photo_') and f.endswith('.jpg')]
+                
+                if not photo_files:
+                    logger.warning("❌ [COMBINED-ANALYSIS] No photo files found")
+                    return jsonify({'error': 'No photo files found'}), 404
+                
+                # Sort by modification time (newest first)
+                photo_files.sort(key=lambda x: os.path.getmtime(os.path.join(uploads_dir, x)), reverse=True)
+                
+                # Find the latest front and back camera photos
+                latest_front = None
+                latest_back = None
+                
+                for photo_file in photo_files:
+                    if photo_file.startswith('photo_front_') and latest_front is None:
+                        latest_front = photo_file
+                    elif photo_file.startswith('photo_back_') and latest_back is None:
+                        latest_back = photo_file
+                    
+                    # Stop if we found both
+                    if latest_front and latest_back:
+                        break
+                
+                if not latest_front or not latest_back:
+                    logger.warning("❌ [COMBINED-ANALYSIS] Missing front or back camera photos")
+                    return jsonify({'error': 'Missing front or back camera photos'}), 404
+                
+                face_filepath = os.path.join(uploads_dir, latest_front)
+                env_filepath = os.path.join(uploads_dir, latest_back)
+                
+                logger.info(f"🔮 [COMBINED-ANALYSIS] Using latest files: Audio={audio_filepath}, Front={face_filepath}, Back={env_filepath}")
+                
+            except Exception as e:
+                logger.error(f"❌ [COMBINED-ANALYSIS] Error getting latest photos: {str(e)}")
+                return jsonify({'error': 'Error getting latest photos'}), 500
+        else:
+            return jsonify({'error': 'Invalid request format'}), 400
+    else:
+        # Original file upload approach
+        required = ['face_image', 'environment_image', 'audio']
+        for req in required:
+            if req not in request.files:
+                logger.warning(f"❌ [COMBINED-ANALYSIS] Missing required file: {req}")
+                return jsonify({'error': f'No {req} file'}), 400
+        
+        logger.info("🔮 [COMBINED-ANALYSIS] All required files present")
+        
+        # Save all files temporarily
+        face_file = request.files['face_image']
+        face_filepath = f"uploads/{face_file.filename}"
+        face_file.save(face_filepath)
+        logger.info(f"🔮 [COMBINED-ANALYSIS] Face image saved: {face_filepath}")
+        
+        env_file = request.files['environment_image']
+        env_filepath = f"uploads/{env_file.filename}"
+        env_file.save(env_filepath)
+        logger.info(f"🔮 [COMBINED-ANALYSIS] Environment image saved: {env_filepath}")
+        
+        audio_file = request.files['audio']
+        audio_filepath = f"uploads/{audio_file.filename}"
+        audio_file.save(audio_filepath)
+        logger.info(f"🔮 [COMBINED-ANALYSIS] Audio file saved: {audio_filepath}")
 
-    raw_analysis = (
-        client.get_text_from_image_front_camera(face_filepath),
-        client.get_text_from_image_back_camera(env_filepath),
-        client.get_text_from_audio(audio_filepath)
-    )
+    # Verify all filepaths are set
+    if not face_filepath or not env_filepath or not audio_filepath:
+        logger.error("❌ [COMBINED-ANALYSIS] Missing file paths")
+        return jsonify({'error': 'Missing file paths'}), 500
+
+    # Get individual analyses with detailed logging
+    logger.info("🔮 [COMBINED-ANALYSIS] Starting individual analyses...")
     
-    # Get all analyses
+    # Face sentiment analysis
+    logger.info("🔮 [COMBINED-ANALYSIS] Analyzing face sentiment...")
+    face_analysis = client.get_text_from_image_front_camera(face_filepath)
+    logger.info(f"🔮 [COMBINED-ANALYSIS] 😊 Face Analysis Result: {face_analysis.content}")
+    
+    # Environment analysis
+    logger.info("🔮 [COMBINED-ANALYSIS] Analyzing environment...")
+    env_analysis = client.get_text_from_image_back_camera(env_filepath)
+    logger.info(f"🔮 [COMBINED-ANALYSIS] 🌍 Environment Analysis Result: {env_analysis.content}")
+    
+    # Audio transcription
+    logger.info("🔮 [COMBINED-ANALYSIS] Transcribing audio...")
+    audio_transcription = client.get_text_from_audio(audio_filepath)
+    logger.info(f"🔮 [COMBINED-ANALYSIS] 📝 Audio Transcription Result: {audio_transcription}")
+    
+    raw_analysis = (face_analysis, env_analysis, audio_transcription)
+    
+    # Get comprehensive analysis
     logger.info("🔮 [COMBINED-ANALYSIS] Starting SoothSayer comprehensive analysis...")
     analysis = client.input_to_audio(face_filepath, env_filepath, audio_filepath)
+    logger.info(f"🔮 [COMBINED-ANALYSIS] 🧠 SoothSayer Combined Analysis Result: {analysis}")
     
     logger.info("🔮 [COMBINED-ANALYSIS] Running legacy TTS generation...")
     text_for_tts = str(analysis) if analysis else "analysis complete"
     asyncio.run(main(text_for_tts))
     
-    # Clean up files
-    os.remove(face_filepath)
-    os.remove(env_filepath)
-    os.remove(audio_filepath)
-    logger.info("🔮 [COMBINED-ANALYSIS] Cleanup completed")
+    # Clean up files only if they were uploaded (not if using latest files)
+    if request.content_type != 'application/json':
+        os.remove(face_filepath)
+        os.remove(env_filepath)
+        os.remove(audio_filepath)
+        logger.info("🔮 [COMBINED-ANALYSIS] Cleanup completed")
     
     logger.info("🔮 [COMBINED-ANALYSIS] ✅ Combined analysis completed successfully")
     
@@ -200,92 +248,169 @@ def analyze_combined_sentiment():
     return jsonify({
         'success': True,
         'raw_data': {
-            'face_sentiment': raw_analysis[0],
-            'environment_analysis': raw_analysis[1],
-            'audio_transcription': raw_analysis[2]
+            'face_sentiment': face_analysis.content,
+            'environment_analysis': env_analysis.content,
+            'audio_transcription': audio_transcription
         },
         'analysis': analysis
     })
 
 @app.route('/api/audio/upload', methods=['POST'])
 def upload_audio():
-    """
-    Endpoint to receive m4a audio files from React Native app
-    """
+    logger.info("🎤 [AUDIO-UPLOAD] Starting audio upload")
+    
+    if 'audio' not in request.files:
+        logger.warning("❌ [AUDIO-UPLOAD] No audio file in request")
+        return jsonify({'error': 'No audio file'}), 400
+    
+    file = request.files['audio']
+    if file.filename == '':
+        logger.warning("❌ [AUDIO-UPLOAD] No selected file")
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Generate unique filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"audio_{timestamp}.m4a"
+    filepath = os.path.join('uploads', filename)
+    
     try:
-        # Check if audio file is present
-        if 'audio' not in request.files:
-            return jsonify({'error': 'No audio file provided'}), 400
+        file.save(filepath)
+        file_size = os.path.getsize(filepath)
+        logger.info(f"✅ [AUDIO-UPLOAD] Audio saved: {filepath} ({file_size} bytes)")
         
-        audio_file = request.files['audio']
-        
-        # Validate file
-        if audio_file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        # Check file type (should be m4a)
-        if not audio_file.filename or not audio_file.filename.lower().endswith('.m4a'):
-            return jsonify({'error': 'Invalid file type. Only m4a files are allowed'}), 400
-        
-        # Get metadata from form data
-        timestamp = request.form.get('timestamp', str(int(datetime.now().timestamp() * 1000)))
-        duration = request.form.get('duration', '10')
-        
-        # Create consistent filename for the most recent audio
-        # This makes it easy for other functions to always access the latest audio
-        latest_filename = "latest_audio.m4a"
-        latest_filepath = f"uploads/audio/{latest_filename}"
-        
-        # Also create a timestamped backup for archival purposes
-        timestamp_str = datetime.fromtimestamp(int(timestamp) / 1000).strftime('%Y%m%d_%H%M%S')
-        backup_filename = f"audio_backup_{timestamp_str}.m4a"
-        backup_filepath = f"uploads/audio/{backup_filename}"
-        
-        # Save the file with both names
-        audio_file.save(latest_filepath)
-        
-        # Create a copy for backup
-        shutil.copy2(latest_filepath, backup_filepath)
-        
-        # Process the audio file (transcribe it)
-        try:
-            transcription = client.get_text_from_audio(latest_filepath)
-            print(f"Audio transcribed successfully: {latest_filename}")
-        except Exception as e:
-            print(f"Error transcribing audio {latest_filename}: {str(e)}")
-            transcription = "Error transcribing audio"
-        
-        # You can add additional processing here:
-        # - Convert to different format
-        # - Analyze audio sentiment
-        # - Store in database
-        # - Send to external services
+        # Get transcription
+        transcription = client.get_text_from_audio(filepath)
+        logger.info(f"📝 [AUDIO-UPLOAD] Transcription: {transcription[:100]}...")
         
         return jsonify({
             'success': True,
-            'message': 'Audio file received and processed successfully',
-            'latest_filename': latest_filename,
-            'backup_filename': backup_filename,
-            'timestamp': timestamp,
-            'duration': duration,
+            'filename': filename,
+            'file_size': file_size,
             'transcription': transcription,
-            'file_size': os.path.getsize(latest_filepath)
+            'latest_filename': filename
         })
         
     except Exception as e:
-        print(f"Error processing audio upload: {str(e)}")
+        logger.error(f"❌ [AUDIO-UPLOAD] Error processing audio: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/photo/upload', methods=['POST'])
+def upload_photo():
+    logger.info("📸 [PHOTO-UPLOAD] Starting photo upload")
+    
+    if 'photo' not in request.files:
+        logger.warning("❌ [PHOTO-UPLOAD] No photo file in request")
+        return jsonify({'error': 'No photo file'}), 400
+    
+    file = request.files['photo']
+    if file.filename == '':
+        logger.warning("❌ [PHOTO-UPLOAD] No selected file")
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Get camera type from form data
+    camera_type = request.form.get('camera_type', 'unknown')
+    timestamp = request.form.get('timestamp', datetime.now().isoformat())
+    
+    # Generate unique filename with timestamp
+    file_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"photo_{camera_type}_{file_timestamp}.jpg"
+    filepath = os.path.join('uploads', filename)
+    
+    try:
+        file.save(filepath)
+        file_size = os.path.getsize(filepath)
+        logger.info(f"✅ [PHOTO-UPLOAD] Photo saved: {filepath} ({file_size} bytes)")
+        logger.info(f"📸 [PHOTO-UPLOAD] Camera: {camera_type}, Timestamp: {timestamp}")
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'file_size': file_size,
+            'camera_type': camera_type,
+            'timestamp': timestamp,
+            'latest_filename': filename
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ [PHOTO-UPLOAD] Error processing photo: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/photo/latest', methods=['GET'])
+def get_latest_photos():
+    """
+    Endpoint to get the most recent photo files (front and back camera)
+    """
+    try:
+        uploads_dir = "uploads"
+        if not os.path.exists(uploads_dir):
+            return jsonify({'error': 'Uploads directory not found'}), 404
+        
+        # Get all photo files
+        photo_files = [f for f in os.listdir(uploads_dir) if f.startswith('photo_') and f.endswith('.jpg')]
+        
+        if not photo_files:
+            return jsonify({'error': 'No photo files found'}), 404
+        
+        # Sort by modification time (newest first)
+        photo_files.sort(key=lambda x: os.path.getmtime(os.path.join(uploads_dir, x)), reverse=True)
+        
+        # Find the latest front and back camera photos
+        latest_front = None
+        latest_back = None
+        
+        for photo_file in photo_files:
+            if photo_file.startswith('photo_front_') and latest_front is None:
+                latest_front = photo_file
+            elif photo_file.startswith('photo_back_') and latest_back is None:
+                latest_back = photo_file
+            
+            # Stop if we found both
+            if latest_front and latest_back:
+                break
+        
+        result = {}
+        
+        if latest_front:
+            front_path = os.path.join(uploads_dir, latest_front)
+            result['front_filename'] = latest_front
+            result['front_file_path'] = front_path
+            result['front_file_size'] = os.path.getsize(front_path)
+            result['front_last_modified'] = datetime.fromtimestamp(os.path.getmtime(front_path)).isoformat()
+        
+        if latest_back:
+            back_path = os.path.join(uploads_dir, latest_back)
+            result['back_filename'] = latest_back
+            result['back_file_path'] = back_path
+            result['back_file_size'] = os.path.getsize(back_path)
+            result['back_last_modified'] = datetime.fromtimestamp(os.path.getmtime(back_path)).isoformat()
+        
+        result['success'] = True
+        logger.info(f"📸 [PHOTO-LATEST] Retrieved latest photos: Front={latest_front}, Back={latest_back}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"❌ [PHOTO-LATEST] Error getting latest photos: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 def get_latest_audio_path():
     """Get the path to the latest audio file"""
-    audio_dir = "uploads/audio"
-    if not os.path.exists(audio_dir):
+    uploads_dir = "uploads"
+    if not os.path.exists(uploads_dir):
         return None
     
-    latest_file = os.path.join(audio_dir, "latest_audio.m4a")
-    if os.path.exists(latest_file):
-        return latest_file
-    return None
+    # Get all audio files in uploads directory
+    audio_files = [f for f in os.listdir(uploads_dir) if f.startswith('audio_') and f.endswith('.m4a')]
+    
+    if not audio_files:
+        return None
+    
+    # Sort by modification time (newest first)
+    audio_files.sort(key=lambda x: os.path.getmtime(os.path.join(uploads_dir, x)), reverse=True)
+    
+    # Return the most recent audio file
+    latest_file = os.path.join(uploads_dir, audio_files[0])
+    return latest_file
 
 @app.route('/api/audio/latest', methods=['GET'])
 def get_latest_audio():

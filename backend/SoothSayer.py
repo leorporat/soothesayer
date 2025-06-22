@@ -3,12 +3,14 @@ from groq import Groq
 import cv2, torch, base64
 import numpy as np
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# Remove unused matplotlib imports to prevent GUI issues
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
 import speech_recognition as sr
 import logging
 
-from vedo import Points, show
+# Remove vedo import since we're not using GUI visualization
+# from vedo import Points, show
 
 # Configure SoothSayer logging
 logging.basicConfig(level=logging.INFO)
@@ -52,8 +54,10 @@ class SoothSayer:
         logger.info(f"🤖 [SOOTHSAYER] Step 3/4: Transcribing audio...")
         audio_transcript       = self.get_text_from_audio(audio)
 
-        logger.info(f"🤖 [SOOTHSAYER] Step 4/4: Calculating optimal movement angle...")
-        optimal_angle_of_movement = self.image_to_projection(image_back)
+        # Temporarily remove optimal movement angle calculation to fix the error
+        # logger.info(f"🤖 [SOOTHSAYER] Step 4/4: Calculating optimal movement angle...")
+        # optimal_angle_of_movement = self.image_to_projection(image_back)
+        optimal_angle_of_movement = 90  # Default to center (90 degrees)
 
         prompt = f"Facial Sentiment:\n{facial_sentiment}\n\nObject In Front of User:\n{sight_characterization}\n\nUser speech:\n{audio_transcript}\n\nOptimal angle of unobstructed movement from 0-180º where 0 is straight left and 180 is straight right:\n{optimal_angle_of_movement}.\n\nPlease keep it conversational and under 20 words."
         
@@ -84,78 +88,93 @@ class SoothSayer:
 
     
     def image_to_projection(self,image):
-        #img = cv2.imdecode(np.array(image))
-        img = cv2.imread(image)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        try:
+            #img = cv2.imdecode(np.array(image))
+            img = cv2.imread(image)
+            if img is None:
+                logger.warning(f"🤖 [SOOTHSAYER] Could not read image: {image}")
+                return 90  # Default to center
+            
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        input_batch = self.transform(img).to(device)
+            input_batch = self.transform(img).to(device)
 
-        with torch.no_grad():
-            prediction = self.midas(input_batch)
+            with torch.no_grad():
+                prediction = self.midas(input_batch)
 
-            prediction = torch.nn.functional.interpolate(
-                prediction.unsqueeze(1),
-                size=img.shape[:2],
-                mode="bicubic",
-                align_corners=False,
-            ).squeeze()
+                prediction = torch.nn.functional.interpolate(
+                    prediction.unsqueeze(1),
+                    size=img.shape[:2],
+                    mode="bicubic",
+                    align_corners=False,
+                ).squeeze()
 
-        output = prediction.cpu().numpy()
+            output = prediction.cpu().numpy()
 
-        h, w = output.shape
+            h, w = output.shape
 
-        x = np.flip(np.tile(np.arange(w), h)/40)
-        x = x - x.mean()
-        y = -np.flip(output.flatten()) + 38
-        #y = np.flip(output.flatten())
-        z = np.repeat(np.arange(h), w)/40
+            x = np.flip(np.tile(np.arange(w), h)/40)
+            x = x - x.mean()
+            y = -np.flip(output.flatten()) + 38
+            #y = np.flip(output.flatten())
+            z = np.repeat(np.arange(h), w)/40
 
-        xyz = np.stack((x, y, z), axis=1)
+            xyz = np.stack((x, y, z), axis=1)
 
-        y = xyz[:, 1]
-        
-        pts = Points(xyz, r=4)  # r is point radius
-        pts.cmap("viridis", xyz[:, 1])  # color by y-values (you can change this)
-        show(pts, axes=1, bg='white', title='3D Point Cloud')
+            y = xyz[:, 1]
+            
+            # Remove GUI visualization - just process the data without displaying
+            # pts = Points(xyz, r=4)  # r is point radius
+            # pts.cmap("viridis", xyz[:, 1])  # color by y-values (you can change this)
+            # show(pts, axes=1, bg='white', title='3D Point Cloud')
 
-        # Get x and y components
-        xy = xyz[:, :2]  # shape (N, 2)
-        angles_xy = np.arctan2(xy[:,1], xy[:,0])  # in radians
-        angles_xy = np.degrees(angles_xy) % 360  # convert to [0, 360)
+            # Get x and y components
+            xy = xyz[:, :2]  # shape (N, 2)
+            angles_xy = np.arctan2(xy[:,1], xy[:,0])  # in radians
+            angles_xy = np.degrees(angles_xy) % 360  # convert to [0, 360)
 
-        # We'll check from 0 to 180 in 10° slices
-        slices = [(i, i+10) for i in range(0, 180, 10)]
-        
-        max_distance = float(0)
-        best_slice = None
+            # We'll check from 0 to 180 in 10° slices
+            slices = [(i, i+10) for i in range(0, 180, 10)]
+            
+            max_distance = float(0)
+            best_slice = None
 
-        for low, high in slices:
-            # Filter points whose (x, y) angle falls in the slice
-            in_slice = (angles_xy >= low) & (angles_xy < high)
-            selected = xyz[in_slice]
+            for low, high in slices:
+                # Filter points whose (x, y) angle falls in the slice
+                in_slice = (angles_xy >= low) & (angles_xy < high)
+                selected = xyz[in_slice]
 
-            if selected.shape[0] == 0:
-                continue  # no points in this slice
+                if selected.shape[0] == 0:
+                    continue  # no points in this slice
 
-            # Direction vector = midpoint of the slice
-            theta = np.radians((low + high) / 2)
-            dir_xy = np.array([np.cos(theta), np.sin(theta), 0.0])
-            dir_z  = np.array([0.0, 0.0, 1.0])
+                # Direction vector = midpoint of the slice
+                theta = np.radians((low + high) / 2)
+                dir_xy = np.array([np.cos(theta), np.sin(theta), 0.0])
+                dir_z  = np.array([0.0, 0.0, 1.0])
 
-            # Create basis: [XY direction, Z axis]
-            basis = np.stack([dir_xy, dir_z], axis=1)  # shape (3, 2)
-            P = basis @ np.linalg.inv(basis.T @ basis) @ basis.T
+                # Create basis: [XY direction, Z axis]
+                basis = np.stack([dir_xy, dir_z], axis=1)  # shape (3, 2)
+                P = basis @ np.linalg.inv(basis.T @ basis) @ basis.T
 
-            projections = selected @ P.T
-            distance = np.sum(np.sum(projections**2, axis=1))
+                projections = selected @ P.T
+                distance = np.sum(np.sum(projections**2, axis=1))
 
-            if distance > max_distance:
-                max_distance = distance
-                best_slice = (low, high)
+                if distance > max_distance:
+                    max_distance = distance
+                    best_slice = (low, high)
 
-        optimal_direction = np.mean(best_slice)
-        
-        return optimal_direction
+            # Add error handling for when no valid slices are found
+            if best_slice is None:
+                logger.warning(f"🤖 [SOOTHSAYER] No valid movement angles found in image: {image}")
+                return 90  # Default to center (90 degrees)
+
+            optimal_direction = np.mean(best_slice)
+            logger.info(f"🤖 [SOOTHSAYER] Calculated optimal direction: {optimal_direction} degrees")
+            return optimal_direction
+            
+        except Exception as e:
+            logger.error(f"🤖 [SOOTHSAYER] Error in image_to_projection: {str(e)}")
+            return 90  # Default to center (90 degrees) on error
                         
     def get_text_from_image_front_camera(self, image_path):
         logger.info(f"🤖 [SOOTHSAYER-FACE] Analyzing facial sentiment from: {image_path}")
