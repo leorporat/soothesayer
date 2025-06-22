@@ -3,6 +3,7 @@ from flask_cors import CORS
 from groq_inference import get_text_from_image_front_camera, get_text_from_image_back_camera, get_text_from_audio, analyze_combined_results
 import os
 from datetime import datetime
+import shutil
 
 app = Flask(__name__)
 CORS(app)
@@ -13,7 +14,14 @@ os.makedirs('uploads', exist_ok=True)
 # Create audio uploads folder specifically for mobile app
 os.makedirs('uploads/audio', exist_ok=True)
 
-
+def get_latest_audio_path():
+    """
+    Helper function to get the path to the most recent audio file
+    """
+    latest_path = "uploads/audio/latest_audio.m4a"
+    if os.path.exists(latest_path):
+        return latest_path
+    return None
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -145,20 +153,28 @@ def upload_audio():
         timestamp = request.form.get('timestamp', str(int(datetime.now().timestamp() * 1000)))
         duration = request.form.get('duration', '10')
         
-        # Create unique filename with timestamp
-        timestamp_str = datetime.fromtimestamp(int(timestamp) / 1000).strftime('%Y%m%d_%H%M%S')
-        filename = f"mobile_audio_{timestamp_str}_{audio_file.filename}"
-        filepath = f"uploads/audio/{filename}"
+        # Create consistent filename for the most recent audio
+        # This makes it easy for other functions to always access the latest audio
+        latest_filename = "latest_audio.m4a"
+        latest_filepath = f"uploads/audio/{latest_filename}"
         
-        # Save the file
-        audio_file.save(filepath)
+        # Also create a timestamped backup for archival purposes
+        timestamp_str = datetime.fromtimestamp(int(timestamp) / 1000).strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"audio_backup_{timestamp_str}.m4a"
+        backup_filepath = f"uploads/audio/{backup_filename}"
+        
+        # Save the file with both names
+        audio_file.save(latest_filepath)
+        
+        # Create a copy for backup
+        shutil.copy2(latest_filepath, backup_filepath)
         
         # Process the audio file (transcribe it)
         try:
-            transcription = get_text_from_audio(filepath)
-            print(f"Audio transcribed successfully: {filename}")
+            transcription = get_text_from_audio(latest_filepath)
+            print(f"Audio transcribed successfully: {latest_filename}")
         except Exception as e:
-            print(f"Error transcribing audio {filename}: {str(e)}")
+            print(f"Error transcribing audio {latest_filename}: {str(e)}")
             transcription = "Error transcribing audio"
         
         # You can add additional processing here:
@@ -167,21 +183,54 @@ def upload_audio():
         # - Store in database
         # - Send to external services
         
-        # For now, we'll keep the file and return success
-        # You might want to delete it after processing depending on your needs
-        
         return jsonify({
             'success': True,
             'message': 'Audio file received and processed successfully',
-            'filename': filename,
+            'latest_filename': latest_filename,
+            'backup_filename': backup_filename,
             'timestamp': timestamp,
             'duration': duration,
             'transcription': transcription,
-            'file_size': os.path.getsize(filepath)
+            'file_size': os.path.getsize(latest_filepath)
         })
         
     except Exception as e:
         print(f"Error processing audio upload: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/audio/latest', methods=['GET'])
+def get_latest_audio():
+    """
+    Endpoint to get the most recent audio file and its transcription
+    """
+    try:
+        latest_path = get_latest_audio_path()
+        
+        if not latest_path:
+            return jsonify({'error': 'No audio file found'}), 404
+        
+        # Get file info
+        file_size = os.path.getsize(latest_path)
+        file_modified = datetime.fromtimestamp(os.path.getmtime(latest_path))
+        
+        # Get transcription
+        try:
+            transcription = get_text_from_audio(latest_path)
+        except Exception as e:
+            print(f"Error transcribing latest audio: {str(e)}")
+            transcription = "Error transcribing audio"
+        
+        return jsonify({
+            'success': True,
+            'filename': 'latest_audio.m4a',
+            'file_path': latest_path,
+            'file_size': file_size,
+            'last_modified': file_modified.isoformat(),
+            'transcription': transcription
+        })
+        
+    except Exception as e:
+        print(f"Error getting latest audio: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
