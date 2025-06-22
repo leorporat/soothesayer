@@ -1,12 +1,40 @@
-import React from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, ScrollView, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function DashboardScreen() {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [sentimentData, setSentimentData] = useState<any[]>([]);
+  const [lastAnalysis, setLastAnalysis] = useState<any>(null);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch latest audio analysis
+      const audioResponse = await fetch('http://localhost:5001/api/audio/latest');
+      if (audioResponse.ok) {
+        const audioData = await audioResponse.json();
+        setLastAnalysis(audioData);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchDashboardData();
+    setIsRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft} />
@@ -14,12 +42,18 @@ export default function DashboardScreen() {
           Personal Dashboard
         </ThemedText>
         <TouchableOpacity style={styles.accountButton}>
-          <Ionicons name="person" size={24} color="#007AFF" />
+          <Ionicons name="person" size={24} color="#3b82f6" />
         </TouchableOpacity>
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={onRefresh}
+          tintColor="#3b82f6"
+        />
+      }>
         {/* Sentiment Graph Section */}
         <View style={styles.section}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -27,7 +61,7 @@ export default function DashboardScreen() {
           </ThemedText>
           <View style={styles.sectionContent}>
             <View style={styles.placeholder}>
-              <Ionicons name="analytics-outline" size={48} color="#8E8E93" />
+              <Ionicons name="analytics-outline" size={48} color="#3b82f6" />
               <ThemedText style={styles.placeholderText}>
                 Your mood trends will appear here
               </ThemedText>
@@ -43,7 +77,7 @@ export default function DashboardScreen() {
           <View style={styles.sectionContent}>
             <View style={styles.pathCard}>
               <View style={styles.pathHeader}>
-                <Ionicons name="location-outline" size={20} color="#007AFF" />
+                <Ionicons name="location-outline" size={20} color="#3b82f6" />
                 <ThemedText style={styles.pathTitle}>Central Park Loop</ThemedText>
               </View>
               <ThemedText style={styles.pathDetails}>
@@ -83,13 +117,14 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
@@ -98,8 +133,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    backgroundColor: '#000',
   },
   headerLeft: {
     width: 40,
@@ -109,18 +143,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#fff',
   },
   accountButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
+    backgroundColor: '#000',
   },
   section: {
     marginTop: 24,
@@ -129,11 +167,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 12,
+    color: '#fff',
   },
   sectionContent: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   placeholder: {
     alignItems: 'center',
@@ -142,13 +183,16 @@ const styles = StyleSheet.create({
   placeholderText: {
     marginTop: 12,
     textAlign: 'center',
-    opacity: 0.6,
+    color: '#bfdbfe',
+    opacity: 0.8,
   },
   pathCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 8,
     padding: 16,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   pathHeader: {
     flexDirection: 'row',
@@ -159,30 +203,36 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
   },
   pathDetails: {
     fontSize: 14,
+    color: '#bfdbfe',
     opacity: 0.7,
     marginBottom: 4,
   },
   pathMood: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#3b82f6',
     fontWeight: '500',
   },
   promptCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 8,
     padding: 16,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   promptText: {
     fontSize: 16,
     marginBottom: 8,
     fontStyle: 'italic',
+    color: '#fff',
   },
   promptTime: {
     fontSize: 12,
+    color: '#bfdbfe',
     opacity: 0.6,
   },
 }); 

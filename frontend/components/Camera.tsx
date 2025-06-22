@@ -1,98 +1,184 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Button, StyleSheet, Text } from 'react-native';
-import { Camera, CameraView } from 'expo-camera';
+import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function VideoRecorder() {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [hasPermission, requestPermission] = useCameraPermissions();
   const frontCameraRef = useRef<CameraView>(null);
   const backCameraRef = useRef<CameraView>(null);
   const [recording, setRecording] = useState(false);
   const [frameCapturing, setFrameCapturing] = useState(false);
-  const frameIntervalRef = useRef<number | null>(null);
+  const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef(false); // Ref to track recording state
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-      console.log('hasPermission', status);
-    })();
-  }, []);
+  // Rate limiting state
+  const lastRequestTime = useRef<number>(0);
+  const requestCount = useRef<number>(0);
+  const REQUEST_COOLDOWN = 5000; // 5 seconds between requests
+  const MAX_REQUESTS_PER_MINUTE = 10;
 
-  // Send frames to backend for analysis (not connected yet)
+  useEffect(() => {
+    if (hasPermission?.granted === false) {
+      requestPermission();
+    }
+  }, [hasPermission]);
+
+  // Enhanced logging with rate limiting
+  const logCameraRequest = (type: string, message: string) => {
+    const timestamp = new Date().toISOString();
+    console.log(`📸 [CAMERA-${type}] ${timestamp}: ${message}`);
+  };
+
+  // Rate limiting check
+  const canMakeRequest = (): boolean => {
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime.current;
+    
+    // Reset request count every minute
+    if (timeSinceLastRequest > 60000) {
+      requestCount.current = 0;
+    }
+    
+    // Check if we're within rate limits
+    if (timeSinceLastRequest < REQUEST_COOLDOWN) {
+      logCameraRequest('RATE-LIMIT', `Request blocked - cooldown active (${REQUEST_COOLDOWN - timeSinceLastRequest}ms remaining)`);
+      return false;
+    }
+    
+    if (requestCount.current >= MAX_REQUESTS_PER_MINUTE) {
+      logCameraRequest('RATE-LIMIT', `Request blocked - max requests per minute reached (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
+      return false;
+    }
+    
+    return true;
+  };
+
   const sendFrontFrameToBackend = async (imageUri: string) => {
-    // TODO: Connect to face-sentiment endpoint later
-    console.log('😊 Front camera frame ready for face analysis:', imageUri);
+    if (!canMakeRequest()) return;
+    
+    try {
+      lastRequestTime.current = Date.now();
+      requestCount.current++;
+      
+      logCameraRequest('FACE-START', `Sending face analysis request (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
+      
+      const formData = new FormData();
+      formData.append('image', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'front_camera.jpg',
+      } as any);
+
+      const response = await fetch('http://localhost:5001/api/analyze/face-sentiment', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const result = await response.json();
+      logCameraRequest('FACE-SUCCESS', `Face sentiment analysis completed`);
+      console.log('😊 Face sentiment analysis:', result);
+      return result;
+    } catch (error) {
+      logCameraRequest('FACE-ERROR', `Face analysis failed: ${error}`);
+      console.error('❌ Error sending front frame to backend:', error);
+    }
   };
 
   const sendBackFrameToBackend = async (imageUri: string) => {
-    // TODO: Connect to environment-sentiment endpoint later
-    console.log('🌍 Back camera frame ready for environment analysis:', imageUri);
+    if (!canMakeRequest()) return;
+    
+    try {
+      lastRequestTime.current = Date.now();
+      requestCount.current++;
+      
+      logCameraRequest('ENV-START', `Sending environment analysis request (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
+      
+      const formData = new FormData();
+      formData.append('image', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'back_camera.jpg',
+      } as any);
+
+      const response = await fetch('http://localhost:5001/api/analyze/environment-sentiment', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const result = await response.json();
+      logCameraRequest('ENV-SUCCESS', `Environment analysis completed`);
+      console.log('🌍 Environment analysis:', result);
+      return result;
+    } catch (error) {
+      logCameraRequest('ENV-ERROR', `Environment analysis failed: ${error}`);
+      console.error('❌ Error sending back frame to backend:', error);
+    }
   };
 
   // Capture frames from both cameras during recording
   const captureFrames = async () => {
-    console.log('🔍 captureFrames called - recording state:', recordingRef.current);
+    logCameraRequest('CAPTURE-START', `Frame capture triggered - recording: ${recordingRef.current}`);
+    
     if (recordingRef.current) {
-      console.log('🎬 === DUAL CAMERA CAPTURE STARTING ===');
       const timestamp = new Date().toLocaleTimeString();
-      console.log(`⏰ Capture timestamp: ${timestamp}`);
+      logCameraRequest('CAPTURE-ACTIVE', `Dual camera capture starting at ${timestamp}`);
       
       let frontCaptured = false;
       let backCaptured = false;
 
-      // Capture from front camera (face analysis)
-      console.log('🔍 Front camera ref exists:', !!frontCameraRef.current);
-      if (frontCameraRef.current) {
+      // Capture from front camera (face analysis) - with rate limiting
+      if (frontCameraRef.current && canMakeRequest()) {
         try {
-          console.log('🔍 Attempting front camera takePictureAsync...');
+          logCameraRequest('CAPTURE-FRONT', `Attempting front camera capture...`);
           const frontPhoto = await frontCameraRef.current.takePictureAsync({
             quality: 0.7,
             base64: false,
           });
-          console.log('📸✅ Front camera frame captured successfully');
-          console.log(`😊 Front frame URI: ${frontPhoto.uri}`);
+          logCameraRequest('CAPTURE-FRONT', `✅ Front camera frame captured: ${frontPhoto.uri}`);
           await sendFrontFrameToBackend(frontPhoto.uri);
           frontCaptured = true;
         } catch (error) {
-          console.error('❌ Error capturing front frame:', error);
+          logCameraRequest('CAPTURE-FRONT', `❌ Front camera capture failed: ${error}`);
         }
       } else {
-        console.log('⚠️ Front camera ref not available');
+        logCameraRequest('CAPTURE-FRONT', `⚠️ Front camera capture skipped (rate limited or no ref)`);
       }
 
-      // Capture from back camera (environment analysis)
-      console.log('🔍 Back camera ref exists:', !!backCameraRef.current);
-      if (backCameraRef.current) {
+      // Capture from back camera (environment analysis) - with rate limiting  
+      if (backCameraRef.current && canMakeRequest()) {
         try {
-          console.log('🔍 Attempting back camera takePictureAsync...');
+          logCameraRequest('CAPTURE-BACK', `Attempting back camera capture...`);
           const backPhoto = await backCameraRef.current.takePictureAsync({
             quality: 0.7,
             base64: false,
           });
-          console.log('📸✅ Back camera frame captured successfully');
-          console.log(`🌍 Back frame URI: ${backPhoto.uri}`);
+          logCameraRequest('CAPTURE-BACK', `✅ Back camera frame captured: ${backPhoto.uri}`);
           await sendBackFrameToBackend(backPhoto.uri);
           backCaptured = true;
         } catch (error) {
-          console.error('❌ Error capturing back frame:', error);
+          logCameraRequest('CAPTURE-BACK', `❌ Back camera capture failed: ${error}`);
         }
       } else {
-        console.log('⚠️ Back camera ref not available');
+        logCameraRequest('CAPTURE-BACK', `⚠️ Back camera capture skipped (rate limited or no ref)`);
       }
 
       // Summary log
-      console.log(`📊 Capture summary: Front=${frontCaptured ? '✅' : '❌'}, Back=${backCaptured ? '✅' : '❌'}`);
-      console.log('🎬 === DUAL CAMERA CAPTURE COMPLETE ===\n');
+      logCameraRequest('CAPTURE-COMPLETE', `Capture summary: Front=${frontCaptured ? '✅' : '❌'}, Back=${backCaptured ? '✅' : '❌'}`);
     }
   };
 
-  // Start frame capture interval
+  // Start frame capture interval with longer interval to reduce requests
   const startFrameCapture = () => {
     setFrameCapturing(true);
-    // Capture frames every 2 seconds during recording
-    frameIntervalRef.current = setInterval(captureFrames, 2000);
-    console.log('🎯 Dual camera frame capture started (every 2 seconds)');
+    // Increased interval to 10 seconds to reduce API load
+    frameIntervalRef.current = setInterval(captureFrames, 10000);
+    logCameraRequest('INTERVAL-START', `Frame capture interval started (every 10 seconds)`);
   };
 
   // Stop frame capture interval
@@ -101,7 +187,7 @@ export default function VideoRecorder() {
       clearInterval(frameIntervalRef.current);
       frameIntervalRef.current = null;
       setFrameCapturing(false);
-      console.log('🎯 Frame capture stopped');
+      logCameraRequest('INTERVAL-STOP', `Frame capture interval stopped`);
     }
   };
 
@@ -161,6 +247,8 @@ export default function VideoRecorder() {
       <Button
         title={recording ? 'Stop Recording' : 'Start Dual Recording'}
         onPress={recording ? stopRecording : startRecording}
+        color="white"
+
       />
     </View>
   );
@@ -169,10 +257,14 @@ export default function VideoRecorder() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   mainCamera: {
-    width: '100%',
+    marginTop: 100,
+    width: '95%',
     height: 300,
     borderRadius: 15,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'white',
+    color: 'black',
   },
   frontCamera: {
     position: 'absolute',
@@ -182,11 +274,9 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 12,
     borderWidth: 3,
-    borderColor: '#00ff00',
+    borderColor: '#3b82f6',
     backgroundColor: '#000',
     zIndex: 10,
   },
-  button: {
-    marginTop: 20,
-  },
+
 });

@@ -6,6 +6,13 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import VideoRecorder from '@/components/Camera';
+import { uploadAudioToBackend } from '@/constants/Api';
+
+// Enhanced logging for audio flow
+const logAudioFlow = (step: string, message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🎤 [HOME-AUDIO-${step}] ${timestamp}: ${message}`, data ? data : '');
+};
 
 export default function HomeScreen() {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
@@ -14,13 +21,21 @@ export default function HomeScreen() {
   const [isIntervalRecordingOn, setIsIntervalRecordingOn] = useState(false);
   const [recordedAudios, setRecordedAudios] = useState<string[]>([]);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isVoiceButtonPressed, setIsVoiceButtonPressed] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
   // Request audio permissions on component mount
   useEffect(() => {
     (async () => {
+      logAudioFlow('PERMISSION', 'Requesting audio permissions');
       const { status } = await Audio.requestPermissionsAsync();
       setHasPermission(status === 'granted');
+      
+      if (status === 'granted') {
+        logAudioFlow('PERMISSION', 'Audio permissions granted');
+      } else {
+        logAudioFlow('PERMISSION', 'Audio permissions denied');
+      }
       
       // Configure audio mode
       await Audio.setAudioModeAsync({
@@ -29,16 +44,18 @@ export default function HomeScreen() {
         staysActiveInBackground: true,
         shouldDuckAndroid: true,
       });
+      logAudioFlow('SETUP', 'Audio mode configured');
     })();
   }, []);
 
   // Handle interval audio recording
   useEffect(() => {
     if (isIntervalRecordingOn && hasPermission) {
-      // Start recording audio every 15 seconds
+      logAudioFlow('INTERVAL', 'Starting interval recording mode');
+      // Increased interval to 30 seconds to reduce API load (was 15 seconds)
       intervalRef.current = setInterval(async () => {
         try {
-          console.log('Starting interval audio recording...');
+          logAudioFlow('INTERVAL', 'Starting interval audio recording...');
           await startRecording();
           
           // Stop recording after 10 seconds (to create 10-second clips)
@@ -47,12 +64,14 @@ export default function HomeScreen() {
           }, 10000);
           
         } catch (error) {
+          logAudioFlow('INTERVAL', 'Error in interval recording', error);
           console.error('Error in interval recording:', error);
         }
-      }, 15000); // 15 seconds between recordings
+      }, 30000); // Increased from 15 seconds to 30 seconds between recordings
     } else {
       // Clear interval when turned off
       if (intervalRef.current) {
+        logAudioFlow('INTERVAL', 'Stopping interval recording mode');
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -68,83 +87,40 @@ export default function HomeScreen() {
 
   const startRecording = async () => {
     try {
-      console.log('Starting recording...');
+      logAudioFlow('RECORD', 'Starting recording...');
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       setRecording(recording);
+      logAudioFlow('RECORD', 'Recording started successfully');
       console.log('Recording started');
     } catch (err) {
+      logAudioFlow('RECORD', 'Failed to start recording', err);
       console.error('Failed to start recording', err);
     }
   };
 
-  const sendAudioToBackend = async (audioUri: string) => {
-    try {
-      console.log('Sending audio to backend:', audioUri);
-      
-      // Create form data for file upload
-      const formData = new FormData();
-      formData.append('audio', {
-        uri: audioUri,
-        type: 'audio/m4a',
-        name: `audio_${Date.now()}.m4a`
-      } as any);
-      
-      // Add any additional metadata
-      formData.append('timestamp', Date.now().toString());
-      formData.append('duration', '10'); // 10 seconds for interval recordings
-      
-      // Send to your backend endpoint
-      const response = await fetch('http://localhost:5001/api/audio/upload', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          // Add any authentication headers if needed
-          // 'Authorization': 'Bearer YOUR_TOKEN'
-        },
-      });
-      
-      if (response.ok) {
-        console.log('Audio sent successfully');
-        const result = await response.json();
-        console.log('Backend response:', result);
-      } else {
-        console.error('Failed to send audio:', response.status);
-      }
-    } catch (error) {
-      console.error('Error sending audio to backend:', error);
-    }
-  };
-
   const stopRecording = async () => {
-    if (!recording) return;
-
     try {
-      console.log('Stopping recording...');
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
-      
-      if (uri) {
-        // Convert to MP3 format (this is a simplified approach)
-        const fileName = `audio_${Date.now()}.m4a`; // Using m4a as it's widely supported
-        const newUri = `${FileSystem.documentDirectory}${fileName}`;
+      logAudioFlow('RECORD', 'Stopping recording...');
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        logAudioFlow('RECORD', 'Recording saved', { uri });
+        console.log('Recording saved to', uri);
         
-        // Copy the file to our documents directory
-        await FileSystem.copyAsync({
-          from: uri,
-          to: newUri
-        });
+        // Upload to backend using enhanced API function
+        if (uri) {
+          logAudioFlow('UPLOAD', 'Uploading recorded audio to backend');
+          await uploadAudioToBackend(uri);
+          setRecordedAudios(prev => [...prev, uri]);
+        }
         
-        setRecordedAudios(prev => [...prev, newUri]);
-        console.log('Audio saved:', newUri);
-        
-        // Send the audio to your backend
-        await sendAudioToBackend(newUri);
+        setRecording(null);
+        setIsRecordingAudio(false);
       }
     } catch (err) {
+      logAudioFlow('RECORD', 'Failed to stop recording', err);
       console.error('Failed to stop recording', err);
     }
   };
@@ -179,6 +155,51 @@ export default function HomeScreen() {
     setIsIntervalRecordingOn(!isIntervalRecordingOn);
   };
 
+  const triggerCombinedAnalysis = async (faceImageUri: string, envImageUri: string, audioUri: string) => {
+    try {
+      const formData = new FormData();
+      
+      formData.append('face_image', {
+        uri: faceImageUri,
+        type: 'image/jpeg',
+        name: 'face.jpg',
+      } as any);
+      
+      formData.append('environment_image', {
+        uri: envImageUri,
+        type: 'image/jpeg',
+        name: 'environment.jpg',
+      } as any);
+      
+      formData.append('audio', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: 'audio.m4a',
+      } as any);
+
+      const response = await fetch('http://localhost:5001/api/analyze/combined-sentiment', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const result = await response.json();
+      console.log('🔮 Combined analysis result:', result);
+      
+      // Play the generated audio response
+      if (result.success) {
+        Alert.alert('Analysis Complete', result.analysis);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error with combined analysis:', error);
+      Alert.alert('Error', 'Failed to get combined analysis');
+    }
+  };
+
   if (hasPermission === null) {
     return (
       <ThemedView style={styles.container}>
@@ -207,62 +228,9 @@ export default function HomeScreen() {
         <VideoRecorder />
       </View>
 
-      {/* Recording Buttons - Below Camera */}
+      {/* Recording Buttons - Below Camera - Moved Down */}
       <View style={styles.buttonContainer}>
-        {/* Square Record Buttons with Beautiful Styling */}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[
-              styles.recordButton,
-              isRecordingAudio ? styles.recordingButton : styles.voiceButton
-            ]}
-            onPress={toggleManualRecording}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconWrapper}>
-              <IconSymbol 
-                name={isRecordingAudio ? "stop.fill" : "mic.fill"} 
-                size={32} 
-                color="white" 
-              />
-            </View>
-            <ThemedText style={styles.buttonText}>
-              {isRecordingAudio ? 'Stop\nVoice' : 'Record\nVoice'}
-            </ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.recordButton, 
-              isIntervalRecordingOn ? styles.recordingButton : styles.videoButton
-            ]}
-            onPress={toggleIntervalRecording}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconWrapper}>
-              <IconSymbol 
-                name={isIntervalRecordingOn ? "stop.fill" : "video.fill"} 
-                size={32} 
-                color="white" 
-              />
-            </View>
-            <ThemedText style={styles.buttonText}>
-              {isIntervalRecordingOn ? 'Stop\nAuto-Record' : 'Start\nAuto-Record'}
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-
-        {/* Audio Status Display */}
-        <View style={styles.audioStatusContainer}>
-          <ThemedText style={styles.audioStatusText}>
-            {isIntervalRecordingOn 
-              ? `Auto-recording every 15s (${recordedAudios.length} files)` 
-              : `Recorded: ${recordedAudios.length} files`
-            }
-          </ThemedText>
-        </View>
-
-        {/* Beautiful Slider Meter */}
+        {/* Beautiful Slider Meter - Moved Up */}
         <View style={styles.sliderContainer}>
           <View style={styles.sliderLabels}>
             <ThemedText style={styles.sliderLabel}>Low</ThemedText>
@@ -302,6 +270,62 @@ export default function HomeScreen() {
             <ThemedText style={styles.sliderRangeText}>0%</ThemedText>
             <ThemedText style={styles.sliderRangeText}>100%</ThemedText>
           </View>
+        </View>
+
+        {/* Square Record Buttons with Beautiful Styling - Moved Down */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[
+              styles.recordButton,
+              isRecordingAudio ? styles.recordingButton : 
+              isVoiceButtonPressed ? styles.voiceButtonPressed : styles.voiceButton
+            ]}
+            onPress={toggleManualRecording}
+            onPressIn={() => setIsVoiceButtonPressed(true)}
+            onPressOut={() => setIsVoiceButtonPressed(false)}
+            activeOpacity={1}
+          >
+            <View style={styles.iconWrapper}>
+              <IconSymbol 
+                name={isRecordingAudio ? "stop.fill" : "mic.fill"} 
+                size={32} 
+                color="white" 
+              />
+            </View>
+            <ThemedText style={styles.buttonText}>
+              {isRecordingAudio ? 'Stop\nVoice' : 'Record\nVoice'}
+            </ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.recordButton, 
+              isIntervalRecordingOn ? styles.recordingButton : styles.videoButton
+            ]}
+            onPress={toggleIntervalRecording}
+            activeOpacity={0.8}
+          >
+            <View style={styles.iconWrapper}>
+              <IconSymbol 
+                name={isIntervalRecordingOn ? "stop.fill" : "video.fill"} 
+                size={32} 
+                color="white" 
+              />
+            </View>
+            <ThemedText style={styles.buttonText}>
+              {isIntervalRecordingOn ? 'Stop\nAuto-Record' : 'Start\nAuto-Record'}
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+
+        {/* Audio Status Display */}
+        <View style={styles.audioStatusContainer}>
+          <ThemedText style={styles.audioStatusText}>
+            {isIntervalRecordingOn 
+              ? `Auto-recording every 30s (${recordedAudios.length} files)` 
+              : `Recorded: ${recordedAudios.length} files`
+            }
+          </ThemedText>
         </View>
       </View>
     </ThemedView>
@@ -373,9 +397,10 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 40,
     backgroundColor: '#000',
   },
   buttonRow: {
@@ -394,6 +419,9 @@ const styles = StyleSheet.create({
   },
   voiceButton: {
     backgroundColor: '#3b82f6',
+  },
+  voiceButtonPressed: {
+    backgroundColor: '#1e40af', // Darker blue for pressed state
   },
   videoButton: {
     backgroundColor: '#4b5563',
@@ -419,7 +447,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    marginBottom: 20,
+    marginBottom: -20,
+    marginTop: 10,
   },
   audioStatusText: {
     color: '#60a5fa',
@@ -430,12 +459,14 @@ const styles = StyleSheet.create({
   sliderContainer: {
     width: '100%',
     paddingHorizontal: 24,
+    marginBottom: 40,
   },
   sliderLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    marginTop: 16,
   },
   sliderLabel: {
     color: '#d1d5db',
