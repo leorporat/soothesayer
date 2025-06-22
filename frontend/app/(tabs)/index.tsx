@@ -52,22 +52,45 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isIntervalRecordingOn && hasPermission) {
       logAudioFlow('INTERVAL', 'Starting interval recording mode');
-      // Increased interval to 30 seconds to reduce API load (was 15 seconds)
-      intervalRef.current = setInterval(async () => {
+      
+      // Start first recording immediately
+      const startFirstRecording = async () => {
         try {
-          logAudioFlow('INTERVAL', 'Starting interval audio recording...');
+          logAudioFlow('INTERVAL', 'Starting first interval recording...');
           await startRecording();
           
-          // Stop recording after 10 seconds (to create 10-second clips)
+          // Stop recording after 5 seconds
           setTimeout(async () => {
             await stopRecording();
-          }, 10000);
-          
+          }, 5000);
         } catch (error) {
-          logAudioFlow('INTERVAL', 'Error in interval recording', error);
-          console.error('Error in interval recording:', error);
+          logAudioFlow('INTERVAL', 'Error in first interval recording', error);
         }
-      }, 30000); // Increased from 15 seconds to 30 seconds between recordings
+      };
+      
+      startFirstRecording();
+      
+      // Set up interval for subsequent recordings
+      intervalRef.current = setInterval(async () => {
+        // Only start new recording if not currently recording
+        if (!recording) {
+          try {
+            logAudioFlow('INTERVAL', 'Starting interval audio recording...');
+            await startRecording();
+            
+            // Stop recording after 5 seconds
+            setTimeout(async () => {
+              await stopRecording();
+            }, 5000);
+            
+          } catch (error) {
+            logAudioFlow('INTERVAL', 'Error in interval recording', error);
+            console.error('Error in interval recording:', error);
+          }
+        } else {
+          logAudioFlow('INTERVAL', 'Skipping recording - already recording');
+        }
+      }, 10000); // 10 seconds between recordings
     } else {
       // Clear interval when turned off
       if (intervalRef.current) {
@@ -83,7 +106,7 @@ export default function HomeScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isIntervalRecordingOn, hasPermission]);
+  }, [isIntervalRecordingOn, hasPermission, recording]);
 
   const startRecording = async () => {
     try {
@@ -92,6 +115,8 @@ export default function HomeScreen() {
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       setRecording(recording);
+      // Set isRecordingAudio to true for both manual and interval recording
+      setIsRecordingAudio(true);
       logAudioFlow('RECORD', 'Recording started successfully');
       console.log('Recording started');
     } catch (err) {
@@ -112,16 +137,28 @@ export default function HomeScreen() {
         // Upload to backend using enhanced API function
         if (uri) {
           logAudioFlow('UPLOAD', 'Uploading recorded audio to backend');
-          await uploadAudioToBackend(uri);
-          setRecordedAudios(prev => [...prev, uri]);
+          try {
+            await uploadAudioToBackend(uri);
+            logAudioFlow('UPLOAD', 'Audio uploaded successfully');
+            setRecordedAudios(prev => [...prev, uri]);
+          } catch (uploadError) {
+            logAudioFlow('UPLOAD', 'Failed to upload audio', uploadError);
+            console.error('Failed to upload audio:', uploadError);
+          }
         }
         
         setRecording(null);
         setIsRecordingAudio(false);
+        logAudioFlow('RECORD', 'Recording stopped and cleaned up');
+      } else {
+        logAudioFlow('RECORD', 'No recording to stop');
       }
     } catch (err) {
       logAudioFlow('RECORD', 'Failed to stop recording', err);
       console.error('Failed to stop recording', err);
+      // Always clean up the recording object even on error
+      setRecording(null);
+      setIsRecordingAudio(false);
     }
   };
 
@@ -138,20 +175,7 @@ export default function HomeScreen() {
       return;
     }
 
-    if (isRecordingAudio) {
-      await stopRecording();
-      setIsRecordingAudio(false);
-    } else {
-      await startRecording();
-      setIsRecordingAudio(true);
-    }
-  };
-
-  const toggleIntervalRecording = () => {
-    if (!hasPermission) {
-      Alert.alert('Permission Required', 'Microphone permission is required to record audio.');
-      return;
-    }
+    // Toggle interval recording on/off
     setIsIntervalRecordingOn(!isIntervalRecordingOn);
   };
 
@@ -277,43 +301,43 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={[
               styles.recordButton,
-              isRecordingAudio ? styles.recordingButton : 
-              isVoiceButtonPressed ? styles.voiceButtonPressed : styles.voiceButton
+              isIntervalRecordingOn ? styles.recordingButton : styles.voiceButton
             ]}
             onPress={toggleManualRecording}
-            onPressIn={() => setIsVoiceButtonPressed(true)}
-            onPressOut={() => setIsVoiceButtonPressed(false)}
             activeOpacity={1}
           >
             <View style={styles.iconWrapper}>
               <IconSymbol 
-                name={isRecordingAudio ? "stop.fill" : "mic.fill"} 
+                name={isIntervalRecordingOn ? "stop.fill" : "mic.fill"} 
                 size={32} 
                 color="white" 
               />
             </View>
             <ThemedText style={styles.buttonText}>
-              {isRecordingAudio ? 'Stop\nVoice' : 'Record\nVoice'}
+              {isIntervalRecordingOn ? 'Stop\nRecording' : 'Start\nRecording'}
             </ThemedText>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.recordButton, 
-              isIntervalRecordingOn ? styles.recordingButton : styles.videoButton
+              styles.videoButton
             ]}
-            onPress={toggleIntervalRecording}
+            onPress={() => {
+              // Placeholder for video functionality
+              Alert.alert('Video Recording', 'Video recording feature coming soon!');
+            }}
             activeOpacity={0.8}
           >
             <View style={styles.iconWrapper}>
               <IconSymbol 
-                name={isIntervalRecordingOn ? "stop.fill" : "video.fill"} 
+                name="video.fill" 
                 size={32} 
                 color="white" 
               />
             </View>
             <ThemedText style={styles.buttonText}>
-              {isIntervalRecordingOn ? 'Stop\nAuto-Record' : 'Start\nAuto-Record'}
+              Record\nVideo
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -322,7 +346,7 @@ export default function HomeScreen() {
         <View style={styles.audioStatusContainer}>
           <ThemedText style={styles.audioStatusText}>
             {isIntervalRecordingOn 
-              ? `Auto-recording every 30s (${recordedAudios.length} files)` 
+              ? `Auto-recording every 10s (${recordedAudios.length} files)` 
               : `Recorded: ${recordedAudios.length} files`
             }
           </ThemedText>
