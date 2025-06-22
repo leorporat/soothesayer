@@ -1,0 +1,150 @@
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.3.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/Users/a../soothesayer/backend/app.py", line 4, in <module>
+    from SoothSayer import SoothSayer
+  File "/Users/a../soothesayer/backend/SoothSayer.py", line 3, in <module>
+    import cv2, torch, base64
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/__init__.py", line 1477, in <module>
+    from .functional import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/functional.py", line 9, in <module>
+    import torch.nn.functional as F
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+INFO:SoothSayer:🤖 [SOOTHSAYER] Initializing SoothSayer with model: MiDaS_small
+INFO:SoothSayer:🤖 [SOOTHSAYER] Loading MiDaS model: MiDaS_small
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Using cache found in /Users/a../.cache/torch/hub/rwightman_gen-efficientnet-pytorch_master
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+INFO:SoothSayer:🤖 [SOOTHSAYER] ✅ Initialization complete
+Loading weights:  None
+ * Serving Flask app 'app'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.56.66.45:5001
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.3.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/Users/a../soothesayer/backend/app.py", line 4, in <module>
+    from SoothSayer import SoothSayer
+  File "/Users/a../soothesayer/backend/SoothSayer.py", line 3, in <module>
+    import cv2, torch, base64
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/__init__.py", line 1477, in <module>
+    from .functional import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/functional.py", line 9, in <module>
+    import torch.nn.functional as F
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+INFO:SoothSayer:🤖 [SOOTHSAYER] Initializing SoothSayer with model: MiDaS_small
+INFO:SoothSayer:🤖 [SOOTHSAYER] Loading MiDaS model: MiDaS_small
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Using cache found in /Users/a../.cache/torch/hub/rwightman_gen-efficientnet-pytorch_master
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+INFO:SoothSayer:🤖 [SOOTHSAYER] ✅ Initialization complete
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 607-317-185
+INFO:__main__:🎯 [CONVERSATION] Starting new audio conversation session
+INFO:__main__:🎯 [CONVERSATION] Received audio file: audio_backup_20250622_071649.m4a
+INFO:__main__:🎯 [CONVERSATION] Audio saved to: uploads/audio/input_20250622_075334.m4a
+INFO:__main__:🎤 [CONVERSATION-STEP-1] Starting audio transcription...
+INFO:SoothSayer:🤖 [SOOTHSAYER-AUDIO] Transcribing audio from: uploads/audio/input_20250622_075334.m4a
+INFO:SoothSayer:🤖 [SOOTHSAYER-AUDIO] Calling GROQ Whisper for transcription...
+INFO:httpx:HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+INFO:SoothSayer:🤖 [SOOTHSAYER-AUDIO] ✅ Transcription complete: ' .'
+INFO:__main__:🎤 [CONVERSATION-STEP-1] ✅ Transcribed: ' .'
+INFO:__main__:🤖 [CONVERSATION-STEP-2] Generating conversational response...
+INFO:__main__:🤖 [GROQ] Generating response for transcription: ' ....'
+INFO:__main__:🤖 [GROQ] Calling GROQ chat completion API...
+INFO:httpx:HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:__main__:🤖 [GROQ] ✅ Response generated: 'What's on your mind? I'm here to listen and help.'
+INFO:__main__:🤖 [CONVERSATION-STEP-2] ✅ Response: 'What's on your mind? I'm here to listen and help.'
+INFO:__main__:🔊 [CONVERSATION-STEP-3] Converting response to audio...
+INFO:__main__:🔊 [TTS] Starting audio generation for text: 'What's on your mind? I'm here to listen and help....'
+INFO:__main__:🔊 [TTS] Output path: uploads/audio/response_20250622_075334.mp3
+INFO:__main__:🔊 [TTS] Initializing LMNT Speech client...
+INFO:__main__:🔊 [TTS] LMNT client connected, starting synthesis with voice 'leah'
+INFO:__main__:🔊 [TTS] ✅ Synthesis successful! Audio size: 29376 bytes
+INFO:__main__:🔊 [TTS] Audio directory ensured: uploads/audio/
+INFO:__main__:🔊 [TTS] ✅ Audio file saved successfully: response_20250622_075334.mp3
+INFO:__main__:🔊 [TTS] ✅ File verification: response_20250622_075334.mp3 (29376 bytes)
+INFO:__main__:🔊 [CONVERSATION-STEP-3] ✅ Audio generated: uploads/audio/response_20250622_075334.mp3
+INFO:__main__:🧹 [CONVERSATION] Cleaned up input file: input_20250622_075334.m4a
+INFO:__main__:🎯 [CONVERSATION] ✅ Session completed successfully
+INFO:werkzeug:127.0.0.1 - - [22/Jun/2025 07:53:36] "POST /api/audio/conversation HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in '/Users/a../soothesayer/backend/app.py', reloading
+Loading weights:  None
+🎤 Transcribed:  .
+🤖 Response: What's on your mind? I'm here to listen and help.
+🔊 Audio generated: uploads/audio/response_20250622_075334.mp3
+INFO:werkzeug: * Restarting with stat
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.3.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/Users/a../soothesayer/backend/app.py", line 4, in <module>
+    from SoothSayer import SoothSayer
+  File "/Users/a../soothesayer/backend/SoothSayer.py", line 3, in <module>
+    import cv2, torch, base64
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/__init__.py", line 1477, in <module>
+    from .functional import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/functional.py", line 9, in <module>
+    import torch.nn.functional as F
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/__init__.py", line 1, in <module>
+    from .modules import *  # noqa: F403
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/__init__.py", line 35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py", line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/torch/nn/modules/transformer.py:20: UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at /Users/runner/work/pytorch/pytorch/pytorch/torch/csrc/utils/tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+INFO:SoothSayer:🤖 [SOOTHSAYER] Initializing SoothSayer with model: MiDaS_small
+INFO:SoothSayer:🤖 [SOOTHSAYER] Loading MiDaS model: MiDaS_small
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+/Users/a../Library/Caches/pypoetry/virtualenvs/backend-WCKDwcnO-py3.12/lib/python3.12/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+Using cache found in /Users/a../.cache/torch/hub/rwightman_gen-efficientnet-pytorch_master
+Using cache found in /Users/a../.cache/torch/hub/intel-isl_MiDaS_master
+INFO:SoothSayer:🤖 [SOOTHSAYER] ✅ Initialization complete
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 607-317-185
+INFO:werkzeug:127.0.0.1 - - [22/Jun/2025 07:54:49] "GET /api/health HTTP/1.1" 200 -

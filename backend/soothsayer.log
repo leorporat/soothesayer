@@ -1,0 +1,12 @@
+2025-06-22 07:31:52,566 - werkzeug - WARNING -  * Debugger is active!
+2025-06-22 07:31:52,598 - werkzeug - INFO -  * Debugger PIN: 607-317-185
+2025-06-22 07:32:05,907 - werkzeug - INFO -  * Detected change in '/Users/a../soothesayer/backend/app.py', reloading
+2025-06-22 07:32:12,371 - werkzeug - WARNING -  * Debugger is active!
+2025-06-22 07:32:12,398 - werkzeug - INFO -  * Debugger PIN: 607-317-185
+2025-06-22 07:33:00,610 - werkzeug - INFO -  * Detected change in '/Users/a../soothesayer/backend/app.py', reloading
+2025-06-22 07:33:08,638 - werkzeug - WARNING -  * Debugger is active!
+2025-06-22 07:33:08,674 - werkzeug - INFO -  * Debugger PIN: 607-317-185
+2025-06-22 07:35:04,136 - werkzeug - INFO - 127.0.0.1 - - [22/Jun/2025 07:35:04] "[35m[1mPOST /api/audio/conversation HTTP/1.1[0m" 500 -
+2025-06-22 07:35:23,654 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2025-06-22 07:35:23,657 - werkzeug - INFO - 127.0.0.1 - - [22/Jun/2025 07:35:23] "POST /api/audio/upload HTTP/1.1" 200 -
+2025-06-22 07:35:24,218 - werkzeug - INFO -  * Detected change in '/Users/a../soothesayer/backend/SoothSayer.py', reloading

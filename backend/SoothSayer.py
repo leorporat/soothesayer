@@ -6,8 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import speech_recognition as sr
+import logging
 
 from vedo import Points, show
+
+# Configure SoothSayer logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -16,10 +21,12 @@ class SoothSayer:
     # model_type = "DPT_Hybrid"   # MiDaS v3 - Hybrid    (medium accuracy, medium inference speed)
     # model_type = "MiDaS_small"  # MiDaS v2.1 - Small   (lowest accuracy, highest inference speed)
     def __init__(self, groq_api_key: str, midas_model_type: str):
+        logger.info(f"🤖 [SOOTHSAYER] Initializing SoothSayer with model: {midas_model_type}")
         self.client     = Groq(api_key=groq_api_key)
         self.recognizer = sr.Recognizer()
 
         # MiDaS initialization
+        logger.info(f"🤖 [SOOTHSAYER] Loading MiDaS model: {midas_model_type}")
         self.midas = torch.hub.load("intel-isl/MiDaS", midas_model_type)
         self.midas.to(device)
         self.midas.eval()
@@ -29,16 +36,28 @@ class SoothSayer:
             self.transform = midas_transforms.dpt_transform
         else:
             self.transform = midas_transforms.small_transform
+        
+        logger.info(f"🤖 [SOOTHSAYER] ✅ Initialization complete")
 
-    def input_to_audio(self, image_front, image_back, audio) -> None:
+    def input_to_audio(self, image_front, image_back, audio) -> str:
+        logger.info(f"🤖 [SOOTHSAYER] Starting comprehensive analysis")
+        logger.info(f"🤖 [SOOTHSAYER] Input files: face={image_front}, env={image_back}, audio={audio}")
+        
+        logger.info(f"🤖 [SOOTHSAYER] Step 1/4: Analyzing facial sentiment...")
         facial_sentiment       = self.get_text_from_image_front_camera(image_front)
+        
+        logger.info(f"🤖 [SOOTHSAYER] Step 2/4: Analyzing environment...")
         sight_characterization = self.get_text_from_image_back_camera(image_back)
+        
+        logger.info(f"🤖 [SOOTHSAYER] Step 3/4: Transcribing audio...")
         audio_transcript       = self.get_text_from_audio(audio)
 
+        logger.info(f"🤖 [SOOTHSAYER] Step 4/4: Calculating optimal movement angle...")
         optimal_angle_of_movement = self.image_to_projection(image_back)
 
         prompt = f"Facial Sentiment:\n{facial_sentiment}\n\nObject In Front of User:\n{sight_characterization}\n\nUser speech:\n{audio_transcript}\n\nOptimal angle of unobstructed movement from 0-180º where 0 is straight left and 180 is straight right:\n{optimal_angle_of_movement}.\n\nPlease keep it conversational and under 20 words."
         
+        logger.info(f"🤖 [SOOTHSAYER] Generating final analysis response...")
         chat_completion = self.client.chat.completions.create(
             messages=[
                 # Set an optional system message. This sets the behavior of the
@@ -59,7 +78,9 @@ class SoothSayer:
             model="llama-3.3-70b-versatile"
         )
 
-        return chat_completion.choices[0].message.content
+        result = chat_completion.choices[0].message.content
+        logger.info(f"🤖 [SOOTHSAYER] ✅ Analysis complete: '{result}'")
+        return result
 
     
     def image_to_projection(self,image):
@@ -137,10 +158,13 @@ class SoothSayer:
         return optimal_direction
                         
     def get_text_from_image_front_camera(self, image_path):
+        logger.info(f"🤖 [SOOTHSAYER-FACE] Analyzing facial sentiment from: {image_path}")
+        
         # Convert local image to base64
         with open(image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
         
+        logger.info(f"🤖 [SOOTHSAYER-FACE] Image encoded, calling GROQ vision model...")
         completion = self.client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
@@ -223,12 +247,17 @@ class SoothSayer:
             stop=None,
         )
 
-        return completion.choices[0].message
+        result = completion.choices[0].message
+        logger.info(f"🤖 [SOOTHSAYER-FACE] ✅ Facial analysis complete")
+        return result
 
     def get_text_from_image_back_camera(self, image_path):
+        logger.info(f"🤖 [SOOTHSAYER-ENV] Analyzing environment from: {image_path}")
+        
         with open(image_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
 
+        logger.info(f"🤖 [SOOTHSAYER-ENV] Image encoded, calling GROQ vision model...")
         completion = self.client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
@@ -256,10 +285,15 @@ class SoothSayer:
         )
 
         print(completion.choices[0].message)
-        return completion.choices[0].message
+        result = completion.choices[0].message
+        logger.info(f"🤖 [SOOTHSAYER-ENV] ✅ Environment analysis complete")
+        return result
 
     def get_text_from_audio(self, filename):
+        logger.info(f"🤖 [SOOTHSAYER-AUDIO] Transcribing audio from: {filename}")
+        
         with open(filename, "rb") as file:
+            logger.info(f"🤖 [SOOTHSAYER-AUDIO] Calling GROQ Whisper for transcription...")
             # Create a transcription of the audio file
             transcription = self.client.audio.transcriptions.create(
             file=file, # Required audio file
@@ -272,4 +306,6 @@ class SoothSayer:
             )
             # To print only the transcription text, you'd use print(transcription.text) (here we're printing the entire transcription object to access timestamps)
             # print(json.dumps(transcription, indent=2, default=str))
+            
+            logger.info(f"🤖 [SOOTHSAYER-AUDIO] ✅ Transcription complete: '{transcription.text}'")
             return transcription.text
