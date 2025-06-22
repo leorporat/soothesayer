@@ -6,7 +6,8 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import VideoRecorder from '@/components/Camera';
-import { uploadAudioToBackend } from '@/constants/Api';
+import { uploadAudioToBackend, uploadPhotoToBackend, triggerCombinedSentimentAnalysis } from '@/constants/Api';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 // Enhanced logging for audio flow
 const logAudioFlow = (step: string, message: string, data?: any) => {
@@ -23,6 +24,11 @@ export default function HomeScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isVoiceButtonPressed, setIsVoiceButtonPressed] = useState(false);
   const intervalRef = useRef<number | null>(null);
+
+  // Camera state and refs for photo capture
+  const [hasCameraPermission, requestCameraPermission] = useCameraPermissions();
+  const frontCameraRef = useRef<CameraView>(null);
+  const backCameraRef = useRef<CameraView>(null);
 
   // Request audio permissions on component mount
   useEffect(() => {
@@ -59,6 +65,17 @@ export default function HomeScreen() {
           logAudioFlow('INTERVAL', 'Starting first interval recording...');
           await startRecording();
           
+          // Capture photos at the same time
+          await captureAndUploadPhotos();
+          
+          // Trigger combined sentiment analysis with latest files
+          try {
+            await triggerCombinedSentimentAnalysis();
+            logAudioFlow('ANALYSIS', 'Combined sentiment analysis completed');
+          } catch (analysisError) {
+            logAudioFlow('ANALYSIS', 'Combined sentiment analysis failed', analysisError);
+          }
+          
           // Stop recording after 5 seconds
           setTimeout(async () => {
             await stopRecording();
@@ -77,6 +94,17 @@ export default function HomeScreen() {
           try {
             logAudioFlow('INTERVAL', 'Starting interval audio recording...');
             await startRecording();
+            
+            // Capture photos at the same time
+            await captureAndUploadPhotos();
+            
+            // Trigger combined sentiment analysis with latest files
+            try {
+              await triggerCombinedSentimentAnalysis();
+              logAudioFlow('ANALYSIS', 'Combined sentiment analysis completed');
+            } catch (analysisError) {
+              logAudioFlow('ANALYSIS', 'Combined sentiment analysis failed', analysisError);
+            }
             
             // Stop recording after 5 seconds
             setTimeout(async () => {
@@ -159,6 +187,60 @@ export default function HomeScreen() {
       // Always clean up the recording object even on error
       setRecording(null);
       setIsRecordingAudio(false);
+    }
+  };
+
+  // Capture and upload photos from both cameras
+  const captureAndUploadPhotos = async () => {
+    if (!hasCameraPermission?.granted) {
+      logAudioFlow('PHOTO', 'Camera permission not granted');
+      return;
+    }
+
+    logAudioFlow('PHOTO', 'Starting photo capture and upload...');
+    
+    try {
+      // Capture from front camera
+      if (frontCameraRef.current) {
+        try {
+          const frontPhoto = await frontCameraRef.current.takePictureAsync({
+            quality: 0.7,
+            base64: false,
+          });
+          logAudioFlow('PHOTO', 'Front camera photo captured');
+          
+          // Upload front camera photo
+          await uploadPhotoToBackend(frontPhoto.uri, 'front', {
+            analysis_type: 'face_sentiment',
+            timestamp: new Date().toISOString()
+          });
+          logAudioFlow('PHOTO', 'Front camera photo uploaded successfully');
+        } catch (error) {
+          logAudioFlow('PHOTO', 'Front camera capture failed', error);
+        }
+      }
+
+      // Capture from back camera
+      if (backCameraRef.current) {
+        try {
+          const backPhoto = await backCameraRef.current.takePictureAsync({
+            quality: 0.7,
+            base64: false,
+          });
+          logAudioFlow('PHOTO', 'Back camera photo captured');
+          
+          // Upload back camera photo
+          await uploadPhotoToBackend(backPhoto.uri, 'back', {
+            analysis_type: 'environment_sentiment',
+            timestamp: new Date().toISOString()
+          });
+          logAudioFlow('PHOTO', 'Back camera photo uploaded successfully');
+        } catch (error) {
+          logAudioFlow('PHOTO', 'Back camera capture failed', error);
+        }
+      }
+    } catch (error) {
+      logAudioFlow('PHOTO', 'Photo capture and upload failed', error);
     }
   };
 
@@ -249,7 +331,10 @@ export default function HomeScreen() {
 
       {/* Camera View - Top Half with Beautiful Background */}
       <View style={styles.cameraContainer}>
-        <VideoRecorder />
+        <VideoRecorder 
+          frontCameraRef={frontCameraRef}
+          backCameraRef={backCameraRef}
+        />
       </View>
 
       {/* Recording Buttons - Below Camera - Moved Down */}
