@@ -1,21 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Button, StyleSheet, Text } from 'react-native';
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
+import { uploadPhotoToBackend } from '@/constants/Api';
 
-export default function VideoRecorder() {
+interface VideoRecorderProps {
+  frontCameraRef?: React.RefObject<CameraView | null>;
+  backCameraRef?: React.RefObject<CameraView | null>;
+}
+
+const VideoRecorder = forwardRef<any, VideoRecorderProps>(({ frontCameraRef: externalFrontRef, backCameraRef: externalBackRef }, ref) => {
   const [hasPermission, requestPermission] = useCameraPermissions();
-  const frontCameraRef = useRef<CameraView>(null);
-  const backCameraRef = useRef<CameraView>(null);
+  const internalFrontCameraRef = useRef<CameraView>(null);
+  const internalBackCameraRef = useRef<CameraView>(null);
+  
+  // Use external refs if provided, otherwise use internal ones
+  const frontCameraRef = externalFrontRef || internalFrontCameraRef;
+  const backCameraRef = externalBackRef || internalBackCameraRef;
+  
   const [recording, setRecording] = useState(false);
   const [frameCapturing, setFrameCapturing] = useState(false);
-  const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingRef = useRef(false); // Ref to track recording state
-
-  // Rate limiting state
-  const lastRequestTime = useRef<number>(0);
-  const requestCount = useRef<number>(0);
-  const REQUEST_COOLDOWN = 5000; // 5 seconds between requests
-  const MAX_REQUESTS_PER_MINUTE = 10;
 
   useEffect(() => {
     if (hasPermission?.granted === false) {
@@ -23,44 +28,15 @@ export default function VideoRecorder() {
     }
   }, [hasPermission]);
 
-  // Enhanced logging with rate limiting
+  // Enhanced logging
   const logCameraRequest = (type: string, message: string) => {
     const timestamp = new Date().toISOString();
     console.log(`📸 [CAMERA-${type}] ${timestamp}: ${message}`);
   };
 
-  // Rate limiting check
-  const canMakeRequest = (): boolean => {
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime.current;
-    
-    // Reset request count every minute
-    if (timeSinceLastRequest > 60000) {
-      requestCount.current = 0;
-    }
-    
-    // Check if we're within rate limits
-    if (timeSinceLastRequest < REQUEST_COOLDOWN) {
-      logCameraRequest('RATE-LIMIT', `Request blocked - cooldown active (${REQUEST_COOLDOWN - timeSinceLastRequest}ms remaining)`);
-      return false;
-    }
-    
-    if (requestCount.current >= MAX_REQUESTS_PER_MINUTE) {
-      logCameraRequest('RATE-LIMIT', `Request blocked - max requests per minute reached (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
-      return false;
-    }
-    
-    return true;
-  };
-
   const sendFrontFrameToBackend = async (imageUri: string) => {
-    if (!canMakeRequest()) return;
-    
     try {
-      lastRequestTime.current = Date.now();
-      requestCount.current++;
-      
-      logCameraRequest('FACE-START', `Sending face analysis request (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
+      logCameraRequest('FACE-START', `Sending face analysis request`);
       
       const formData = new FormData();
       formData.append('image', {
@@ -88,13 +64,8 @@ export default function VideoRecorder() {
   };
 
   const sendBackFrameToBackend = async (imageUri: string) => {
-    if (!canMakeRequest()) return;
-    
     try {
-      lastRequestTime.current = Date.now();
-      requestCount.current++;
-      
-      logCameraRequest('ENV-START', `Sending environment analysis request (${requestCount.current}/${MAX_REQUESTS_PER_MINUTE})`);
+      logCameraRequest('ENV-START', `Sending environment analysis request`);
       
       const formData = new FormData();
       formData.append('image', {
@@ -132,8 +103,8 @@ export default function VideoRecorder() {
       let frontCaptured = false;
       let backCaptured = false;
 
-      // Capture from front camera (face analysis) - with rate limiting
-      if (frontCameraRef.current && canMakeRequest()) {
+      // Capture from front camera (face analysis)
+      if (frontCameraRef.current) {
         try {
           logCameraRequest('CAPTURE-FRONT', `Attempting front camera capture...`);
           const frontPhoto = await frontCameraRef.current.takePictureAsync({
@@ -141,17 +112,31 @@ export default function VideoRecorder() {
             base64: false,
           });
           logCameraRequest('CAPTURE-FRONT', `✅ Front camera frame captured: ${frontPhoto.uri}`);
+          
+          // Send to face analysis endpoint
           await sendFrontFrameToBackend(frontPhoto.uri);
+          
+          // Also upload to uploads folder
+          try {
+            await uploadPhotoToBackend(frontPhoto.uri, 'front', {
+              analysis_type: 'face_sentiment',
+              timestamp: new Date().toISOString()
+            });
+            logCameraRequest('UPLOAD-FRONT', `✅ Front camera photo uploaded to uploads folder`);
+          } catch (uploadError) {
+            logCameraRequest('UPLOAD-FRONT', `❌ Front camera photo upload failed: ${uploadError}`);
+          }
+          
           frontCaptured = true;
         } catch (error) {
           logCameraRequest('CAPTURE-FRONT', `❌ Front camera capture failed: ${error}`);
         }
       } else {
-        logCameraRequest('CAPTURE-FRONT', `⚠️ Front camera capture skipped (rate limited or no ref)`);
+        logCameraRequest('CAPTURE-FRONT', `⚠️ Front camera capture skipped (no ref)`);
       }
 
-      // Capture from back camera (environment analysis) - with rate limiting  
-      if (backCameraRef.current && canMakeRequest()) {
+      // Capture from back camera (environment analysis)
+      if (backCameraRef.current) {
         try {
           logCameraRequest('CAPTURE-BACK', `Attempting back camera capture...`);
           const backPhoto = await backCameraRef.current.takePictureAsync({
@@ -159,13 +144,27 @@ export default function VideoRecorder() {
             base64: false,
           });
           logCameraRequest('CAPTURE-BACK', `✅ Back camera frame captured: ${backPhoto.uri}`);
+          
+          // Send to environment analysis endpoint
           await sendBackFrameToBackend(backPhoto.uri);
+          
+          // Also upload to uploads folder
+          try {
+            await uploadPhotoToBackend(backPhoto.uri, 'back', {
+              analysis_type: 'environment_sentiment',
+              timestamp: new Date().toISOString()
+            });
+            logCameraRequest('UPLOAD-BACK', `✅ Back camera photo uploaded to uploads folder`);
+          } catch (uploadError) {
+            logCameraRequest('UPLOAD-BACK', `❌ Back camera photo upload failed: ${uploadError}`);
+          }
+          
           backCaptured = true;
         } catch (error) {
           logCameraRequest('CAPTURE-BACK', `❌ Back camera capture failed: ${error}`);
         }
       } else {
-        logCameraRequest('CAPTURE-BACK', `⚠️ Back camera capture skipped (rate limited or no ref)`);
+        logCameraRequest('CAPTURE-BACK', `⚠️ Back camera capture skipped (no ref)`);
       }
 
       // Summary log
@@ -226,7 +225,7 @@ export default function VideoRecorder() {
   };
 
   if (hasPermission === null) return <View />;
-  if (hasPermission === false) return <Text>No access to camera</Text>;
+  if (!hasPermission?.granted) return <Text>No access to camera</Text>;
 
   return (
     <View style={styles.container}>
@@ -252,7 +251,9 @@ export default function VideoRecorder() {
       />
     </View>
   );
-}
+});
+
+VideoRecorder.displayName = 'VideoRecorder';
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -280,3 +281,5 @@ const styles = StyleSheet.create({
   },
 
 });
+
+export default VideoRecorder;
